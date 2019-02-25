@@ -7,8 +7,8 @@ import sched, time
 import math
 import rospy
 import tf2_ros
-import visualization_msgs
 from geometry_msgs.msg import Point
+from visualization_msgs.msg import Marker
 
 
 class Mapper:
@@ -35,6 +35,7 @@ class Mapper:
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+        self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
 
     def __initializeHumanHandPose(self, handle):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1,
@@ -148,10 +149,14 @@ class Mapper:
 
     def __transformFrame(self, data, to_frame):
         points_return = []
-        transform = self.tf_buffer.lookup_transform(to_frame,
-                                                    data.header.frame_id, #source frame
-                                                    rospy.Time(0), #get the tf at first available time
-                                                    rospy.Duration(1.0)) #wait for 1 second
+        try:
+            transform = self.tf_buffer.lookup_transform(to_frame,
+                                                        data.header.frame_id, #source frame
+                                                        rospy.Time(0), #get the tf at first available time
+                                                        rospy.Duration(1.0)) #wait for max 1 second
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            print('Exception on transform lookup!')
+            return data
         for point in data.joints_position:
             point_transformed = Point()
             point_transformed.x = point.x + transform.transform.translation.x
@@ -160,10 +165,11 @@ class Mapper:
             points_return.append(point_transformed)
         data_return = data
         data_return.joints_position = points_return
+        data_return.header.frame_id = to_frame
         return data_return
 
-    def __transformHandToOrigin(self, data):
-        data = self.__transformFrame(data, 'camera_link')
+    def __transformHandToOrigin(self, data, to_frame):
+        data = self.__transformFrame(data, to_frame)
         position_palm_base = self.__getPositionVectorForDataIndex(data, 0)
         position_knuckle_middle_finger = self.__getPositionVectorForDataIndex(data, 3)
         position_knuckle_index_finger = self.__getPositionVectorForDataIndex(data, 2)
@@ -195,9 +201,30 @@ class Mapper:
             pointList.append(np.array(this_point))
         return pointList
 
+    def __publishMarkers(self, target_frame):
+        message = Marker()
+        message.header.frame_id = target_frame
+        message.header.stamp = rospy.get_rostime()
+        message.color.r = 1.0
+        # message.color.g = 1.0
+        message.color.a = 1.0
+        message.scale.x = message.scale.y = message.scale.z = 0.01
+        message.type = message.LINE_STRIP
+
+        index_finger_points = [self.last_data[2]]
+        index_finger_points.extend(self.last_data[9:12])
+        for point in index_finger_points:
+            message_point = Point()
+            message_point.x = point[0]
+            message_point.y = point[1]
+            message_point.z = point[2]
+            message.points.append(message_point)
+        self.marker_pub.publish(message)
+
     def callback(self, data):
         current_time = time.time()
-        self.last_data = self.__transformHandToOrigin(data)
+        target_frame = 'camera_link'
+        self.last_data = self.__transformHandToOrigin(data, target_frame)
         HPE_finger_tip_pose = self.last_data[11]
         if self.last_callback_time != 0:
             self.human_hand_vel = (HPE_finger_tip_pose - self.last_human_hand_pose) / current_time
@@ -205,6 +232,7 @@ class Mapper:
         else:
             self.last_callback_time = current_time
         self.last_human_hand_pose = HPE_finger_tip_pose
+        self.__publishMarkers(target_frame)
         print(HPE_finger_tip_pose)
 
     def execute(self):
