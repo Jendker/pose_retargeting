@@ -5,6 +5,10 @@ import numpy as np
 from numpy.linalg import inv
 import sched, time
 import math
+import rospy
+import tf2_ros
+import visualization_msgs
+from geometry_msgs.msg import Point
 
 
 class Mapper:
@@ -28,6 +32,9 @@ class Mapper:
         self.weight_matrix_inv = np.identity(3)
         self.damping_matrix = np.identity(3) * 0.1
         self.last_data = []
+
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
     def __initializeHumanHandPose(self, handle):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1,
@@ -139,7 +146,24 @@ class Mapper:
         top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
         return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
 
+    def __transformFrame(self, data, to_frame):
+        points_return = []
+        transform = self.tf_buffer.lookup_transform(to_frame,
+                                                    data.header.frame_id, #source frame
+                                                    rospy.Time(0), #get the tf at first available time
+                                                    rospy.Duration(1.0)) #wait for 1 second
+        for point in data.joints_position:
+            point_transformed = Point()
+            point_transformed.x = point.x + transform.transform.translation.x
+            point_transformed.y = point.y + transform.transform.translation.y
+            point_transformed.z = point.z + transform.transform.translation.z
+            points_return.append(point_transformed)
+        data_return = data
+        data_return.joints_position = points_return
+        return data_return
+
     def __transformHandToOrigin(self, data):
+        data = self.__transformFrame(data, 'camera_link')
         position_palm_base = self.__getPositionVectorForDataIndex(data, 0)
         position_knuckle_middle_finger = self.__getPositionVectorForDataIndex(data, 3)
         position_knuckle_index_finger = self.__getPositionVectorForDataIndex(data, 2)
