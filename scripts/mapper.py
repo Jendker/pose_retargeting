@@ -78,31 +78,7 @@ class Mapper:
         jacobian = np.array(jacobian_vect).reshape(dimension)
         return jacobian
 
-    def __rodriguezToRotationMatrix(self, axis, theta):
-        """
-        Return the rotation matrix associated with counterclockwise rotation about
-        the given axis by theta radians.
-        """
-        axis = np.asarray(axis)
-        axis = axis / np.linalg.norm(axis)
-        a = math.cos(theta / 2.0)
-        b, c, d = -axis * math.sin(theta / 2.0)
-        aa, bb, cc, dd = a * a, b * b, c * c, d * d
-        bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-        return np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-                         [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-                         [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
-
     def skew(self, vector):
-        """
-        this function returns a numpy array with the skew symmetric cross product matrix for vector.
-        the skew symmetric cross product matrix is defined such that
-        np.cross(a, b) = np.dot(skew(a), b)
-
-        :param vector: An array like vector to create the skew symmetric cross product matrix for
-        :return: A numpy array of the skew symmetric cross product vector
-        """
-
         return np.array([[0, -vector[2], vector[1]],
                         [vector[2], 0, -vector[0]],
                         [-vector[1], vector[0], 0]])
@@ -136,11 +112,11 @@ class Mapper:
         rotation_axis = np.cross(desired_vector, given_vector)
         c = np.dot(given_vector, desired_vector)
         if c == -1:
-            return np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+            return np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
 
         skew_mat = self.skew(rotation_axis)
         # https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
-        rotation_matrix = np.identity(3) + skew_mat + np.linalg.multi_dot([skew_mat, skew_mat, (1.0/1.0+c)])
+        rotation_matrix = np.identity(3) + skew_mat + np.linalg.multi_dot([skew_mat, skew_mat]) * (1.0/1.0+c)
         return rotation_matrix
 
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
@@ -175,7 +151,6 @@ class Mapper:
         position_knuckle_index_finger = self.__getPositionVectorForDataIndex(data, 2)
         given_vector = position_knuckle_middle_finger - position_palm_base
         target_vector = np.array([0, 0, 1])
-        given_vector = np.array([0, 0, -1])
         rotation_matrix = self.__getRotationMatrixFromVectors(desired_vector=target_vector, given_vector=given_vector)
         _, sim_list_position_knuckle_index_finger = vrep.simxGetObjectPosition(self.clientID, self.finger_tip_handle, -1,
                                                     vrep.simx_opmode_blocking)
@@ -233,7 +208,7 @@ class Mapper:
             self.last_callback_time = current_time
         self.last_human_hand_pose = HPE_finger_tip_pose
         self.__publishMarkers(target_frame)
-        print(HPE_finger_tip_pose)
+        print(self.last_data[2])
 
     def execute(self):
         scheduler = sched.scheduler(time.time, time.sleep)
