@@ -9,6 +9,8 @@ import rospy
 import tf2_ros
 from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker
+import geometry_msgs.msg
+import tf_conversions
 
 
 class Mapper:
@@ -157,7 +159,6 @@ class Mapper:
         transformation_vector = self.__transformationVector(position_knuckle_index_finger,
                                                             np.array(sim_list_position_knuckle_index_finger))
         euclidean_transformation_matrix = self.__euclideanTransformation(rotation_matrix, transformation_vector)
-        # print (euclidean_transformation_matrix)
         new_data = []
         for point in self.__dataToPointsList(data):
             extended_point = np.concatenate((point, [1]))
@@ -196,8 +197,50 @@ class Mapper:
             message.points.append(message_point)
         self.marker_pub.publish(message)
 
+    def __publishTransformation(self, data):
+        br = tf2_ros.TransformBroadcaster()
+        t = geometry_msgs.msg.TransformStamped()
+
+        t.header.stamp = rospy.Time.now()
+        t.header.frame_id = data.header.frame_id
+        t.child_frame_id = "vrep_hand"
+
+        position_knuckle_index_finger = data.joints_position[2]
+        vectorized_index_knuckle = self.__getPositionVectorForDataIndex(data, 2)
+        vectorized_palm_base = self.__getPositionVectorForDataIndex(data, 0)
+        vectorized_middle_knuckle = self.__getPositionVectorForDataIndex(data, 3)
+        vectorized_ring_knuckle = self.__getPositionVectorForDataIndex(data, 4)
+        vector_hand = vectorized_middle_knuckle - vectorized_palm_base
+        vector_hand2 = vectorized_index_knuckle - vectorized_ring_knuckle
+
+        t.transform.translation.x = position_knuckle_index_finger.x
+        t.transform.translation.y = position_knuckle_index_finger.y
+        t.transform.translation.z = position_knuckle_index_finger.z
+
+        vector_hand_x = np.array([vector_hand[1], vector_hand[2]])
+        vector_hand_x = vector_hand_x / np.linalg.norm(vector_hand_x)
+        vector_hand_y = np.array([vector_hand[0], vector_hand[2]])
+        vector_hand_y = vector_hand_y / np.linalg.norm(vector_hand_y)
+        vector_hand_z = np.array([vector_hand2[0], vector_hand2[1]])
+        vector_hand_z = vector_hand_z / np.linalg.norm(vector_hand_z)
+
+        x_y_reference = np.array([0, 1])
+        z_reference = np.array([1, 0])
+        x_angle = math.acos(np.dot(x_y_reference, vector_hand_x))
+        y_angle = math.acos(np.dot(x_y_reference, vector_hand_y))
+        z_angle = math.acos(np.dot(z_reference, vector_hand_z))
+
+        q = tf_conversions.transformations.quaternion_from_euler(x_angle, y_angle, z_angle)
+        t.transform.rotation.x = q[0]
+        t.transform.rotation.y = q[1]
+        t.transform.rotation.z = q[2]
+        t.transform.rotation.w = q[3]
+
+        br.sendTransform(t)
+
     def callback(self, data):
         current_time = time.time()
+        self.__publishTransformation(data)
         target_frame = 'camera_link'
         self.last_data = self.__transformHandToOrigin(data, target_frame)
         HPE_finger_tip_pose = self.last_data[11]
@@ -208,7 +251,6 @@ class Mapper:
             self.last_callback_time = current_time
         self.last_human_hand_pose = HPE_finger_tip_pose
         self.__publishMarkers(target_frame)
-        print(self.last_data[2])
 
     def execute(self):
         scheduler = sched.scheduler(time.time, time.sleep)
