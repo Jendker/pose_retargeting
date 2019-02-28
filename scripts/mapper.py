@@ -118,7 +118,7 @@ class Mapper:
 
         skew_mat = self.skew(rotation_axis)
         # https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
-        rotation_matrix = np.identity(3) + skew_mat + np.linalg.multi_dot([skew_mat, skew_mat]) * (1.0/1.0+c)
+        rotation_matrix = np.identity(3) + skew_mat + np.dot(skew_mat, skew_mat) * (1.0/(1.0+c))
         return rotation_matrix
 
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
@@ -206,31 +206,20 @@ class Mapper:
         t.child_frame_id = "vrep_hand"
 
         position_knuckle_index_finger = data.joints_position[2]
-        vectorized_index_knuckle = self.__getPositionVectorForDataIndex(data, 2)
+        transform_to_position_base = np.array([0.033, -0.0099, 0.352])
         vectorized_palm_base = self.__getPositionVectorForDataIndex(data, 0)
         vectorized_middle_knuckle = self.__getPositionVectorForDataIndex(data, 3)
-        vectorized_ring_knuckle = self.__getPositionVectorForDataIndex(data, 4)
         vector_hand = vectorized_middle_knuckle - vectorized_palm_base
-        vector_hand2 = vectorized_index_knuckle - vectorized_ring_knuckle
 
-        t.transform.translation.x = position_knuckle_index_finger.x
-        t.transform.translation.y = position_knuckle_index_finger.y
-        t.transform.translation.z = position_knuckle_index_finger.z
+        rotation_matrix = self.__getRotationMatrixFromVectors(np.array([0, 0, 1]), vector_hand)
+        rotated_transform_to_position_base = np.dot(rotation_matrix, transform_to_position_base)
+        rotation_matrix = self.__euclideanTransformation(rotation_matrix, np.array([0, 0, 0]))
 
-        vector_hand_x = np.array([vector_hand[1], vector_hand[2]])
-        vector_hand_x = vector_hand_x / np.linalg.norm(vector_hand_x)
-        vector_hand_y = np.array([vector_hand[0], vector_hand[2]])
-        vector_hand_y = vector_hand_y / np.linalg.norm(vector_hand_y)
-        vector_hand_z = np.array([vector_hand2[0], vector_hand2[1]])
-        vector_hand_z = vector_hand_z / np.linalg.norm(vector_hand_z)
+        t.transform.translation.x = position_knuckle_index_finger.x - rotated_transform_to_position_base[0]
+        t.transform.translation.y = position_knuckle_index_finger.y - rotated_transform_to_position_base[1]
+        t.transform.translation.z = position_knuckle_index_finger.z - rotated_transform_to_position_base[2]
 
-        x_y_reference = np.array([0, 1])
-        z_reference = np.array([1, 0])
-        x_angle = math.acos(np.dot(x_y_reference, vector_hand_x))
-        y_angle = math.acos(np.dot(x_y_reference, vector_hand_y))
-        z_angle = math.acos(np.dot(z_reference, vector_hand_z))
-
-        q = tf_conversions.transformations.quaternion_from_euler(x_angle, y_angle, z_angle)
+        q = tf_conversions.transformations.quaternion_from_matrix(rotation_matrix)
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
