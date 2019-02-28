@@ -4,10 +4,10 @@ import rospy
 from mapper import Mapper
 from dl_pose_estimation.msg import JointsPosition
 
+
 def callback(data):
     # rospy.loginfo("%s is age: %d" % (data.header.frame_id, data.header.stamp))
     rospy.loginfo("")
-
 
 
 def listener():
