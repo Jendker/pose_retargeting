@@ -13,6 +13,10 @@ import geometry_msgs.msg
 import tf_conversions
 
 
+def degToRad(angle):
+    return angle / 180.0 * math.pi
+
+
 class Mapper:
     def __init__(self):
         vrep.simxFinish(-1)  # just in case, close all opened connections
@@ -29,10 +33,17 @@ class Mapper:
                                                                    vrep.simx_opmode_blocking)
         _, self.IMCP_side_joint_handle = vrep.simxGetObjectHandle(self.clientID, 'IMCP_side_joint',
                                                                   vrep.simx_opmode_blocking)
+        self.list_joints_handles = [self.IDIP_joint_handle, self.IPIP_joint_handle, self.IMCP_front_joint_handle,
+                                    self.IMCP_side_joint_handle]
+        joints_limits = [[90, 0], [90, 0], [100, 0], [10, -10]]
+        self.joints_limits = []
+        for joint_limits in joints_limits:
+            max_angle, min_angle = joint_limits
+            self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
         self.last_human_hand_tip_pose = self.__initializeHumanHandPose(self.finger_tip_handle)
         self.last_callback_time = 0
         self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
-        self.damping_matrix = np.identity(3) * 0.1  # with size of the task descriptor dimension
+        self.damping_matrix = np.identity(3) * 0.01  # with size of the task descriptor dimension
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
@@ -41,21 +52,35 @@ class Mapper:
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
 
+    def __calculateWeightMatrixInverse(self):
+        weight_matrix = np.identity(4)
+        for index, joint_handle in enumerate(self.list_joints_handles):
+            _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_oneshot_wait)
+            joint_max, joint_min = self.joints_limits[index]
+            joint_position = degToRad(joint_position)
+            if joint_max == joint_position or joint_min == joint_position:
+                performance_gradient = math.inf
+            else:
+                performance_gradient = ((joint_max - joint_min)**2 * (2 * joint_position - joint_max - joint_min)) / (4 * (joint_max - joint_position) ** 2 * (joint_position - joint_min)**2)
+            if performance_gradient > 1:
+                w = 1 + performance_gradient
+            else:
+                w = 1
+            weight_matrix[index, index] = w
+        self.weight_matrix_inv = inv(weight_matrix)
+
     def __initializeHumanHandPose(self, handle):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1,
                                                     vrep.simx_opmode_blocking)
         return np.array(current_pos)
 
     def __setJointsTargetVelocity(self, joints_velocities):
-        list_joints_handles = [self.IDIP_joint_handle, self.IPIP_joint_handle, self.IMCP_front_joint_handle,
-                               self.IMCP_side_joint_handle]
 
         for index, velocity in enumerate(joints_velocities):
-            result = vrep.simxSetJointTargetVelocity(self.clientID, list_joints_handles[index], velocity * 180.0 / math.pi,
+            result = vrep.simxSetJointTargetVelocity(self.clientID, self.list_joints_handles[index], velocity * 180.0 / math.pi,
                                             vrep.simx_opmode_oneshot)
             if result != 0 and not self.first_inverse_calculation:
                 print("vrep.simxSetJointTargetVelocity return code", result)
-
 
     def __getError(self):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, self.finger_tip_handle, -1,
@@ -68,13 +93,6 @@ class Mapper:
         jacobian = jacobian.T
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, inv(
             np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
-
-    def __executeInverseOnce(self):
-        error = self.__getError()
-        pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
-        q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
-        self.__setJointsTargetVelocity(q_vel)
-        self.first_inverse_calculation = False
 
     def __getJacobian(self):
         empty_buff = bytearray()
@@ -110,7 +128,6 @@ class Mapper:
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
         top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
         return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
-
 
     def __transformDataWithTransform(self, data, transformation_matrix):
         rotation_matrix = transformation_matrix[0:3, 0:3]
@@ -204,8 +221,17 @@ class Mapper:
             self.last_callback_time = current_time
         else:
             self.last_callback_time = current_time
+        print(HPE_finger_tip_pose)
         self.last_human_hand_tip_pose = HPE_finger_tip_pose
         self.__publishMarkers(self.node_frame_name)
+
+    def __executeInverseOnce(self):
+        error = self.__getError()
+        self.__calculateWeightMatrixInverse()
+        pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
+        q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
+        self.__setJointsTargetVelocity(q_vel)
+        self.first_inverse_calculation = False
 
     def execute(self):
         start_time = time.time()
