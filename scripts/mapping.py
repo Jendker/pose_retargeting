@@ -15,8 +15,7 @@ def listener():
     mapper = Mapper()
     rospy.Subscriber("/dl_pose_estimation/joints_position", JointsPosition, mapper.callback)
 
-    # spin() simply keeps python from exiting until this node is stopped
-    rospy.spin()
+    mapper.execute()  # keeps program running in loop
 
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@
 import vrep
 import numpy as np
 from numpy.linalg import inv
-import sched, time
+import time
 import math
 import rospy
 import tf2_ros
@@ -29,12 +29,13 @@ class Mapper:
                                                                    vrep.simx_opmode_blocking)
         _, self.IMCP_side_joint_handle = vrep.simxGetObjectHandle(self.clientID, 'IMCP_side_joint',
                                                                   vrep.simx_opmode_blocking)
-        self.last_human_hand_pose = self.__initializeHumanHandPose(self.finger_tip_handle)
+        self.last_human_hand_tip_pose = self.__initializeHumanHandPose(self.finger_tip_handle)
         self.last_callback_time = 0
-        self.weight_matrix_inv = np.identity(3)
-        self.damping_matrix = np.identity(3) * 0.1
+        self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
+        self.damping_matrix = np.identity(3) * 0.1  # with size of the task descriptor dimension
         self.last_data = []
         self.node_frame_name = "hand_vrep"
+        self.first_inverse_calculation = True
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -43,33 +44,37 @@ class Mapper:
     def __initializeHumanHandPose(self, handle):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1,
                                                     vrep.simx_opmode_blocking)
-        return current_pos
+        return np.array(current_pos)
 
     def __setJointsTargetVelocity(self, joints_velocities):
         list_joints_handles = [self.IDIP_joint_handle, self.IPIP_joint_handle, self.IMCP_front_joint_handle,
                                self.IMCP_side_joint_handle]
+
         for index, velocity in enumerate(joints_velocities):
-            vrep.simxSetJointTargetVelocity(self.clientID, list_joints_handles[index], velocity,
+            result = vrep.simxSetJointTargetVelocity(self.clientID, list_joints_handles[index], velocity * 180.0 / math.pi,
                                             vrep.simx_opmode_oneshot)
+            if result != 0 and not self.first_inverse_calculation:
+                print("vrep.simxSetJointTargetVelocity return code", result)
+
 
     def __getError(self):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, self.finger_tip_handle, -1,
                                                     vrep.simx_opmode_blocking)
         current_pos_vec = np.array(current_pos)
-        return self.last_human_hand_pose - current_pos_vec
+        return self.last_human_hand_tip_pose - current_pos_vec
 
     def __getPseudoInverseJacobian(self):
         jacobian = self.__getJacobian()
+        jacobian = jacobian.T
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, inv(
             np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
 
-    def __setFingerTarget(self, scheduler):
+    def __executeInverseOnce(self):
         error = self.__getError()
         pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
         q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
         self.__setJointsTargetVelocity(q_vel)
-        # continue with loop
-        scheduler.enter(self.sampling_time, 1, self.__setFingerTarget, (scheduler,))
+        self.first_inverse_calculation = False
 
     def __getJacobian(self):
         empty_buff = bytearray()
@@ -105,11 +110,6 @@ class Mapper:
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
         top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
         return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
-
-    def __getRotationMatrixFromTransform(self, transform):
-        q = transform.transform.rotation
-        translation = transform.transform.translation
-        tf_conversions.transformations.quaternion_from_matrix
 
 
     def __transformDataWithTransform(self, data, transformation_matrix):
@@ -200,14 +200,15 @@ class Mapper:
         self.last_data = self.__transformDataWithTransform(data, transformation_matrix)
         HPE_finger_tip_pose = self.last_data.joints_position[11]
         if self.last_callback_time != 0:
-            self.human_hand_vel = (HPE_finger_tip_pose - self.last_human_hand_pose) / current_time
+            self.human_hand_vel = (HPE_finger_tip_pose - self.last_human_hand_tip_pose) / current_time
             self.last_callback_time = current_time
         else:
             self.last_callback_time = current_time
-        self.last_human_hand_pose = HPE_finger_tip_pose
+        self.last_human_hand_tip_pose = HPE_finger_tip_pose
         self.__publishMarkers(self.node_frame_name)
 
     def execute(self):
-        scheduler = sched.scheduler(time.time, time.sleep)
-        scheduler.enter(self.sampling_time, 1, self.__setFingerTarget, (scheduler,))
-        scheduler.run()
+        start_time = time.time()
+        while not rospy.is_shutdown():
+            self.__executeInverseOnce()
+            time.sleep(self.sampling_time - ((time.time() - start_time) % self.sampling_time))
