@@ -24,6 +24,8 @@ class Mapper:
         if self.clientID != -1:
             print('Connected to remote API server')
         self.K_matrix = np.identity(3)
+        # self.K_matrix[1][1] = 3
+        # self.K_matrix[2][2] = 3
         self.human_hand_vel = np.zeros(3)
         self.sampling_time = 0.03  # in seconds
         _, self.finger_tip_handle = vrep.simxGetObjectHandle(self.clientID, 'ITIP_tip', vrep.simx_opmode_blocking)
@@ -35,50 +37,47 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IDIP_joint_handle, self.IPIP_joint_handle, self.IMCP_front_joint_handle,
                                     self.IMCP_side_joint_handle]
-        joints_limits = [[90, 0], [90, 0], [100, 0], [10, -10]]
+        joints_limits = [[90., 0.], [90., 0.], [100., 0.], [10., -10.]]
         self.joints_limits = []
         for joint_limits in joints_limits:
             max_angle, min_angle = joint_limits
             self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
         self.last_human_hand_tip_pose = self.__initializeHumanHandPose(self.finger_tip_handle)
-        self.last_callback_time = 0
+        self.last_callback_time = 0  # 0 means no callback yet
         self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
-        self.damping_matrix = np.identity(3) * 0.01  # with size of the task descriptor dimension
+        self.damping_matrix = np.identity(3) * 0.03  # with size of the task descriptor dimension
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
 
-    def __calculateWeightMatrixInverse(self):
+    def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(4)
         for index, joint_handle in enumerate(self.list_joints_handles):
             _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_oneshot_wait)
             joint_max, joint_min = self.joints_limits[index]
-            joint_position = degToRad(joint_position)
             if joint_max == joint_position or joint_min == joint_position:
-                performance_gradient = math.inf
+                performance_gradient = float("inf")
             else:
-                performance_gradient = ((joint_max - joint_min)**2 * (2 * joint_position - joint_max - joint_min)) / (4 * (joint_max - joint_position) ** 2 * (joint_position - joint_min)**2)
-            if performance_gradient > 1:
-                w = 1 + performance_gradient
+                performance_gradient = ((joint_max - joint_min) ** 2 * (
+                            2.0 * joint_position - joint_max - joint_min)) / float(
+                    4.0 * (joint_max - joint_position) ** 2 * (joint_position - joint_min) ** 2)
+            if performance_gradient > 1.0:
+                w = 1.0 + performance_gradient
             else:
-                w = 1
+                w = 1.0
             weight_matrix[index, index] = w
         self.weight_matrix_inv = inv(weight_matrix)
 
     def __initializeHumanHandPose(self, handle):
-        _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1,
-                                                    vrep.simx_opmode_blocking)
+        _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_blocking)
         return np.array(current_pos)
 
     def __setJointsTargetVelocity(self, joints_velocities):
-
         for index, velocity in enumerate(joints_velocities):
-            result = vrep.simxSetJointTargetVelocity(self.clientID, self.list_joints_handles[index], velocity * 180.0 / math.pi,
-                                            vrep.simx_opmode_oneshot)
+            result = vrep.simxSetJointTargetVelocity(self.clientID, self.list_joints_handles[index], velocity,
+                                                     vrep.simx_opmode_oneshot)
             if result != 0 and not self.first_inverse_calculation:
                 print("vrep.simxSetJointTargetVelocity return code", result)
 
@@ -98,7 +97,7 @@ class Mapper:
         empty_buff = bytearray()
         _, dimension, jacobian_vect, _, _ = vrep.simxCallScriptFunction(self.clientID, 'remoteApiCommandServer',
                                                                         vrep.sim_scripttype_childscript,
-                                                                        'jacobianIKGroup', [], [],
+                                                                        'jacobianIKGroup', self.list_joints_handles, [],
                                                                         ['IK_Group'], empty_buff,
                                                                         vrep.simx_opmode_blocking)
         jacobian = np.array(jacobian_vect).reshape(dimension)
@@ -106,8 +105,8 @@ class Mapper:
 
     def skew(self, vector):
         return np.array([[0, -vector[2], vector[1]],
-                        [vector[2], 0, -vector[0]],
-                        [-vector[1], vector[0], 0]])
+                         [vector[2], 0, -vector[0]],
+                         [-vector[1], vector[0], 0]])
 
     def __transformationVector(self, from_point, to_point):
         return to_point - from_point
@@ -122,7 +121,7 @@ class Mapper:
 
         skew_mat = self.skew(rotation_axis)
         # https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
-        rotation_matrix = np.identity(3) + skew_mat + np.dot(skew_mat, skew_mat) * (1.0/(1.0+c))
+        rotation_matrix = np.identity(3) + skew_mat + np.dot(skew_mat, skew_mat) * (1.0 / (1.0 + c))
         return rotation_matrix
 
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
@@ -132,10 +131,12 @@ class Mapper:
     def __transformDataWithTransform(self, data, transformation_matrix):
         rotation_matrix = transformation_matrix[0:3, 0:3]
         translation_vector = transformation_matrix[0:3, 3]
-        inverse_transformation_matrix = self.__euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation_vector))
+        inverse_transformation_matrix = self.__euclideanTransformation(rotation_matrix.T,
+                                                                       np.dot(-rotation_matrix.T, translation_vector))
         points_return = []
         for index, _ in enumerate(data.joints_position):
-            vector_transformed = np.dot(inverse_transformation_matrix, np.append(self.__getPositionVectorForDataIndex(data, index), [1]))[0:3]
+            vector_transformed = np.dot(inverse_transformation_matrix,
+                                        np.append(self.__getPositionVectorForDataIndex(data, index), [1]))[0:3]
             points_return.append(vector_transformed)
         data_return = data
         data_return.joints_position = points_return
@@ -216,18 +217,19 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)
         self.last_data = self.__transformDataWithTransform(data, transformation_matrix)
         HPE_finger_tip_pose = self.last_data.joints_position[11]
+        new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.33 + self.last_human_hand_tip_pose * 0.67
         if self.last_callback_time != 0:
-            self.human_hand_vel = (HPE_finger_tip_pose - self.last_human_hand_tip_pose) / current_time
+            self.human_hand_vel = (new_HPE_finger_tip_pose - self.last_human_hand_tip_pose) / (
+                        current_time - self.last_callback_time)
             self.last_callback_time = current_time
         else:
             self.last_callback_time = current_time
-        print(HPE_finger_tip_pose)
-        self.last_human_hand_tip_pose = HPE_finger_tip_pose
+        self.last_human_hand_tip_pose = new_HPE_finger_tip_pose
         self.__publishMarkers(self.node_frame_name)
 
     def __executeInverseOnce(self):
         error = self.__getError()
-        self.__calculateWeightMatrixInverse()
+        self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
         q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
         self.__setJointsTargetVelocity(q_vel)
