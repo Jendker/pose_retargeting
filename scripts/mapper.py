@@ -22,7 +22,7 @@ class Mapper:
         vrep.simxFinish(-1)  # just in case, close all opened connections
         self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
         if self.clientID != -1:
-            print('Connected to remote API server')
+            rospy.loginfo('Connected to remote API server')
         self.K_matrix = np.identity(3)
         # self.K_matrix[1][1] = 3
         # self.K_matrix[2][2] = 3
@@ -50,6 +50,7 @@ class Mapper:
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
         _, self.dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255, 255, 255, 255], vrep.simx_opmode_blocking)
+        self.simulationFingerLength = 0.096
 
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
 
@@ -83,7 +84,7 @@ class Mapper:
             result = vrep.simxSetJointTargetVelocity(self.clientID, self.list_joints_handles[index], velocity,
                                                      vrep.simx_opmode_oneshot)
             if result != 0 and not self.first_inverse_calculation:
-                print("vrep.simxSetJointTargetVelocity return code", result)
+                rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
 
     def __getError(self):
         _, current_pos = vrep.simxGetObjectPosition(self.clientID, self.finger_tip_handle, -1,
@@ -147,6 +148,30 @@ class Mapper:
         data_return.header.frame_id = self.node_frame_name
         data_return.header.stamp = rospy.Time.now()
         return data_return
+
+    def __getFingerLength(self, data, indices):
+        if len(indices) != 4:
+            rospy.logerr("Error. Fingers point count does not match 4!")
+            return 0.0
+        length = 0.0
+        for i, index in enumerate(indices):
+            if i == 0:
+                continue
+            length += np.linalg.norm(data.joints_position[index] - data.joints_position[indices[i-1]])
+        return length
+
+    def __scaleHandData(self, data):
+        fingers_lenths = []
+        fingers_lenths.append(self.__getFingerLength(data, [2, 9, 10, 11]))
+        fingers_lenths.append(self.__getFingerLength(data, [3, 12, 13, 14]))
+        fingers_lenths.append(self.__getFingerLength(data, [4, 15, 16, 17]))
+        mean_length = sum(fingers_lenths) / float(len(fingers_lenths))
+        scaling_ratio = self.simulationFingerLength / mean_length
+        center_point = data.joints_position[2]  # index knuckle as transformation center
+        new_data = data
+        for i, point in enumerate(data.joints_position):
+            new_data.joints_position[i] = (point - center_point) * scaling_ratio + center_point
+        return new_data
 
     def __getPositionVectorForDataIndex(self, data, index):
         joint = data.joints_position[index]
@@ -219,7 +244,8 @@ class Mapper:
     def callback(self, data):
         current_time = time.time()
         transformation_matrix = self.__publishTransformation(data)
-        self.last_data = self.__transformDataWithTransform(data, transformation_matrix)
+        data = self.__transformDataWithTransform(data, transformation_matrix)
+        self.last_data = self.__scaleHandData(data)  # ready to save after scaling
         HPE_finger_tip_pose = self.last_data.joints_position[11]
         new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_tip_pose * 0.8
         if self.last_callback_time != 0:
