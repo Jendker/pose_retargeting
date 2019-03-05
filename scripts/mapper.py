@@ -229,7 +229,7 @@ class Mapper:
         else:
             self.last_callback_time = current_time
         self.last_human_hand_tip_pose = new_HPE_finger_tip_pose
-        vrep.simxSetObjectPosition(self.clientID, self.dummy_target, -1, np.asarray(self.last_human_hand_tip_pose), vrep.simx_opmode_blocking)
+        vrep.simxSetObjectPosition(self.clientID, self.dummy_target, -1, self.last_human_hand_tip_pose.tolist(), vrep.simx_opmode_blocking)
         self.__publishMarkers(self.node_frame_name)
 
     def __executeInverseOnce(self):
