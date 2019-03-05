@@ -49,8 +49,12 @@ class Mapper:
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
+        _, self.dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255, 255, 255, 255], vrep.simx_opmode_blocking)
 
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
+
+    def cleanup(self):
+        vrep.simxRemoveObject(self.clientID, self.dummy_target, vrep.simx_opmode_blocking)
 
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(4)
@@ -217,7 +221,7 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)
         self.last_data = self.__transformDataWithTransform(data, transformation_matrix)
         HPE_finger_tip_pose = self.last_data.joints_position[11]
-        new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.33 + self.last_human_hand_tip_pose * 0.67
+        new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_tip_pose * 0.8
         if self.last_callback_time != 0:
             self.human_hand_vel = (new_HPE_finger_tip_pose - self.last_human_hand_tip_pose) / (
                         current_time - self.last_callback_time)
@@ -225,6 +229,7 @@ class Mapper:
         else:
             self.last_callback_time = current_time
         self.last_human_hand_tip_pose = new_HPE_finger_tip_pose
+        vrep.simxSetObjectPosition(self.clientID, self.dummy_target, -1, np.asarray(self.last_human_hand_tip_pose), vrep.simx_opmode_blocking)
         self.__publishMarkers(self.node_frame_name)
 
     def __executeInverseOnce(self):
@@ -240,3 +245,4 @@ class Mapper:
         while not rospy.is_shutdown():
             self.__executeInverseOnce()
             time.sleep(self.sampling_time - ((time.time() - start_time) % self.sampling_time))
+        self.cleanup()
