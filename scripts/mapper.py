@@ -21,12 +21,11 @@ class Mapper:
     def __init__(self):
         vrep.simxFinish(-1)  # just in case, close all opened connections
         self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
+        self.tasks_count = 3
         if self.clientID != -1:
             rospy.loginfo('Connected to remote API server')
-        self.K_matrix = np.identity(3)
-        # self.K_matrix[1][1] = 3
-        # self.K_matrix[2][2] = 3
-        self.human_hand_vel = np.zeros(3)
+        self.K_matrix = np.identity(3 * self.tasks_count)
+        self.human_hand_vel = np.zeros(3 * self.tasks_count)
         self.sampling_time = 0.03  # in seconds
         _, self.finger_tip_handle = vrep.simxGetObjectHandle(self.clientID, 'ITIP_tip', vrep.simx_opmode_blocking)
         _, self.IDIP_joint_handle = vrep.simxGetObjectHandle(self.clientID, 'IDIP_joint', vrep.simx_opmode_blocking)
@@ -37,25 +36,45 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IDIP_joint_handle, self.IPIP_joint_handle, self.IMCP_front_joint_handle,
                                     self.IMCP_side_joint_handle]
+        self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
         joints_limits = [[90., 0.], [90., 0.], [100., 0.], [10., -10.]]
         self.joints_limits = []
         for joint_limits in joints_limits:
             max_angle, min_angle = joint_limits
             self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
-        self.last_human_hand_tip_pose = self.__initializeHumanHandPose(self.finger_tip_handle)
+        self.last_human_hand_pose = self.__simulationObjectsPose(
+            self.finger_pose_handles)  # initialize with simulation pose
         self.last_callback_time = 0  # 0 means no callback yet
         self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
-        self.damping_matrix = np.identity(3) * 0.03  # with size of the task descriptor dimension
+        self.damping_matrix = np.identity(3 * self.tasks_count) * 0.03  # with size of the task descriptor dimension
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
-        _, self.dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255, 255, 255, 255], vrep.simx_opmode_blocking)
+        self.dummy_targets_handles = self.__createTargetDummies()
+
         self.simulationFingerLength = 0.096
 
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
 
     def cleanup(self):
-        vrep.simxRemoveObject(self.clientID, self.dummy_target, vrep.simx_opmode_blocking)
+        for dummy_handle in self.dummy_targets_handles:
+            vrep.simxRemoveObject(self.clientID, dummy_handle, vrep.simx_opmode_blocking)
+
+    def __createTargetDummies(self):
+        dummy_targets = []
+        for i in range(0, self.tasks_count):
+            _, dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255, 255, 255, 255], vrep.simx_opmode_blocking)
+            dummy_targets.append(dummy_target)
+        return dummy_targets
+
+    def __updateTargetDummiesPoses(self):
+        last_pose = self.last_human_hand_pose.copy()
+        for index, dummy_handle in enumerate(self.dummy_targets_handles):
+            start_index = index * 3
+            end_index = start_index + 3
+            dummy_position_list = last_pose[start_index:end_index].tolist()
+            vrep.simxSetObjectPosition(self.clientID, dummy_handle, -1, dummy_position_list,
+                                       vrep.simx_opmode_oneshot)
 
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(4)
@@ -66,7 +85,7 @@ class Mapper:
                 performance_gradient = float("inf")
             else:
                 performance_gradient = ((joint_max - joint_min) ** 2 * (
-                            2.0 * joint_position - joint_max - joint_min)) / float(
+                        2.0 * joint_position - joint_max - joint_min)) / float(
                     4.0 * (joint_max - joint_position) ** 2 * (joint_position - joint_min) ** 2)
             if performance_gradient > 1.0:
                 w = 1.0 + performance_gradient
@@ -75,8 +94,11 @@ class Mapper:
             weight_matrix[index, index] = w
         self.weight_matrix_inv = inv(weight_matrix)
 
-    def __initializeHumanHandPose(self, handle):
-        _, current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_blocking)
+    def __simulationObjectsPose(self, handles):
+        current_pos = []
+        for handle in handles:
+            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_blocking)
+            current_pos.extend(this_current_pos)
         return np.array(current_pos)
 
     def __setJointsTargetVelocity(self, joints_velocities):
@@ -87,14 +109,12 @@ class Mapper:
                 rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
 
     def __getError(self):
-        _, current_pos = vrep.simxGetObjectPosition(self.clientID, self.finger_tip_handle, -1,
-                                                    vrep.simx_opmode_blocking)
-        current_pos_vec = np.array(current_pos)
-        return self.last_human_hand_tip_pose - current_pos_vec
+        current_poses = self.__simulationObjectsPose(self.finger_pose_handles)
+        return self.last_human_hand_pose - current_poses
 
     def __getPseudoInverseJacobian(self):
         jacobian = self.__getJacobian()
-        jacobian = jacobian.T
+        jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T, jacobian[..., 6:9].T), axis=0)
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, inv(
             np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
 
@@ -103,7 +123,7 @@ class Mapper:
         _, dimension, jacobian_vect, _, _ = vrep.simxCallScriptFunction(self.clientID, 'remoteApiCommandServer',
                                                                         vrep.sim_scripttype_childscript,
                                                                         'jacobianIKGroup', self.list_joints_handles, [],
-                                                                        ['IK_Group'], empty_buff,
+                                                                        ['IK_Index'], empty_buff,
                                                                         vrep.simx_opmode_blocking)
         jacobian = np.array(jacobian_vect).reshape(dimension)
         return jacobian
@@ -157,13 +177,12 @@ class Mapper:
         for i, index in enumerate(indices):
             if i == 0:
                 continue
-            length += np.linalg.norm(data.joints_position[index] - data.joints_position[indices[i-1]])
+            length += np.linalg.norm(data.joints_position[index] - data.joints_position[indices[i - 1]])
         return length
 
     def __scaleHandData(self, data):
         fingers_lenths = []
         fingers_lenths.append(self.__getFingerLength(data, [2, 9, 10, 11]))
-        fingers_lenths.append(self.__getFingerLength(data, [3, 12, 13, 14]))
         fingers_lenths.append(self.__getFingerLength(data, [4, 15, 16, 17]))
         mean_length = sum(fingers_lenths) / float(len(fingers_lenths))
         scaling_ratio = self.simulationFingerLength / mean_length
@@ -246,16 +265,17 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         self.last_data = self.__scaleHandData(data)  # ready to save after scaling
-        HPE_finger_tip_pose = self.last_data.joints_position[11]
-        new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_tip_pose * 0.8
+        HPE_finger_tip_pose = np.concatenate((self.last_data.joints_position[11], self.last_data.joints_position[10],
+                                              self.last_data.joints_position[9]))
+        new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_pose * 0.8
         if self.last_callback_time != 0:
-            self.human_hand_vel = (new_HPE_finger_tip_pose - self.last_human_hand_tip_pose) / (
-                        current_time - self.last_callback_time)
+            self.human_hand_vel = (new_HPE_finger_tip_pose - self.last_human_hand_pose) / (
+                    current_time - self.last_callback_time)
             self.last_callback_time = current_time
         else:
             self.last_callback_time = current_time
-        self.last_human_hand_tip_pose = new_HPE_finger_tip_pose
-        vrep.simxSetObjectPosition(self.clientID, self.dummy_target, -1, self.last_human_hand_tip_pose.tolist(), vrep.simx_opmode_blocking)
+        self.last_human_hand_pose = new_HPE_finger_tip_pose
+        # self.__updateTargetDummiesPoses()
         self.__publishMarkers(self.node_frame_name)
 
     def __executeInverseOnce(self):
