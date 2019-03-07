@@ -34,10 +34,10 @@ class Mapper:
                                                                    vrep.simx_opmode_blocking)
         _, self.IMCP_side_joint_handle = vrep.simxGetObjectHandle(self.clientID, 'IMCP_side_joint',
                                                                   vrep.simx_opmode_blocking)
-        self.list_joints_handles = [self.IDIP_joint_handle, self.IPIP_joint_handle, self.IMCP_front_joint_handle,
-                                    self.IMCP_side_joint_handle]
+        self.list_joints_handles = [self.IMCP_side_joint_handle, self.IMCP_front_joint_handle,
+                                    self.IPIP_joint_handle, self.IDIP_joint_handle]
         self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
-        joints_limits = [[90., 0.], [90., 0.], [100., 0.], [10., -10.]]
+        joints_limits = [[10., -10.], [100., 0.], [90., 0.], [90., 0.]]
         self.joints_limits = []
         for joint_limits in joints_limits:
             max_angle, min_angle = joint_limits
@@ -63,7 +63,7 @@ class Mapper:
     def __createTargetDummies(self):
         dummy_targets = []
         for i in range(0, self.tasks_count):
-            _, dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255, 255, 255, 255], vrep.simx_opmode_blocking)
+            _, dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255 * (i % 3), 255 * ((i+1) % 3), 255 * ((i+2) % 3), 255], vrep.simx_opmode_blocking)
             dummy_targets.append(dummy_target)
         return dummy_targets
 
@@ -109,8 +109,8 @@ class Mapper:
                 rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
 
     def __getError(self):
-        current_poses = self.__simulationObjectsPose(self.finger_pose_handles)
-        return self.last_human_hand_pose - current_poses
+        current_pose = self.__simulationObjectsPose(self.finger_pose_handles)
+        return self.last_human_hand_pose - current_pose
 
     def __getPseudoInverseJacobian(self):
         jacobian = self.__getJacobian()
@@ -267,15 +267,15 @@ class Mapper:
         self.last_data = self.__scaleHandData(data)  # ready to save after scaling
         HPE_finger_tip_pose = np.concatenate((self.last_data.joints_position[11], self.last_data.joints_position[10],
                                               self.last_data.joints_position[9]))
-        new_HPE_finger_tip_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_pose * 0.8
+        new_HPE_finger_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_pose * 0.8
         if self.last_callback_time != 0:
-            self.human_hand_vel = (new_HPE_finger_tip_pose - self.last_human_hand_pose) / (
+            self.human_hand_vel = (new_HPE_finger_pose - self.last_human_hand_pose) / (
                     current_time - self.last_callback_time)
             self.last_callback_time = current_time
         else:
             self.last_callback_time = current_time
-        self.last_human_hand_pose = new_HPE_finger_tip_pose
-        # self.__updateTargetDummiesPoses()
+        self.last_human_hand_pose = new_HPE_finger_pose
+        self.__updateTargetDummiesPoses()
         self.__publishMarkers(self.node_frame_name)
 
     def __executeInverseOnce(self):
