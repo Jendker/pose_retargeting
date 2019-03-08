@@ -11,7 +11,7 @@ from geometry_msgs.msg import Point
 from visualization_msgs.msg import Marker
 import geometry_msgs.msg
 import tf_conversions
-
+from jacobian_calculation import JacobianCalculation, ConfigurationType
 
 def degToRad(angle):
     return angle / 180.0 * math.pi
@@ -36,6 +36,7 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IMCP_side_joint_handle, self.IMCP_front_joint_handle,
                                     self.IPIP_joint_handle, self.IDIP_joint_handle]
+        self.jacobian_calculation = JacobianCalculation(self.clientID, self.list_joints_handles, ConfigurationType.finger)
         self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
         joints_limits = [[10., -10.], [100., 0.], [90., 0.], [90., 0.]]
         self.joints_limits = []
