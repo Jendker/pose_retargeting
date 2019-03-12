@@ -36,7 +36,9 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IMCP_side_joint_handle, self.IMCP_front_joint_handle,
                                     self.IPIP_joint_handle, self.IDIP_joint_handle]
-        self.jacobian_calculation = JacobianCalculation(self.clientID, self.list_joints_handles, ConfigurationType.finger)
+        all_handles_for_jacobian_calc = self.list_joints_handles[:]
+        all_handles_for_jacobian_calc.append(self.finger_tip_handle)
+        self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc, ConfigurationType.finger)
         self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
         joints_limits = [[10., -10.], [100., 0.], [90., 0.], [90., 0.]]
         self.joints_limits = []
@@ -114,7 +116,7 @@ class Mapper:
         return self.last_human_hand_pose - current_pose
 
     def __getPseudoInverseJacobian(self):
-        jacobian = self.__getJacobian()
+        jacobian = self.jacobian_calculation.getJacobian()
         jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T, jacobian[..., 6:9].T), axis=0)
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, inv(
             np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
