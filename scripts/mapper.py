@@ -36,17 +36,21 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IMCP_side_joint_handle, self.IMCP_front_joint_handle,
                                     self.IPIP_joint_handle, self.IDIP_joint_handle]
+        self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
+        self.last_human_hand_pose = self.__simulationObjectsPose(
+            self.finger_pose_handles, mode=vrep.simx_opmode_blocking)  # initialize with simulation pose
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.finger_tip_handle)
         self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc, ConfigurationType.finger)
-        self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
+        for joint_handle in self.list_joints_handles:  # initialize streaming
+            _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
+        for handle in self.finger_pose_handles:
+            _, _ = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_streaming)
         joints_limits = [[10., -10.], [100., 0.], [90., 0.], [90., 0.]]
         self.joints_limits = []
         for joint_limits in joints_limits:
             max_angle, min_angle = joint_limits
             self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
-        self.last_human_hand_pose = self.__simulationObjectsPose(
-            self.finger_pose_handles, mode=vrep.simx_opmode_blocking)  # initialize with simulation pose
         self.last_callback_time = 0  # 0 means no callback yet
         self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
         self.damping_matrix = np.identity(3 * self.tasks_count) * 0.001  # with size of the task descriptor dimension
@@ -55,10 +59,6 @@ class Mapper:
         self.first_inverse_calculation = True
         self.dummy_targets_handles = self.__createTargetDummies()
         self.last_update = time.time()
-        for joint_handle in self.list_joints_handles:  # initialize streaming
-            _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
-        for handle in self.finger_pose_handles:
-            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_streaming)
 
         self.simulationFingerLength = 0.096
 
