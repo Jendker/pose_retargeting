@@ -2,6 +2,7 @@ import vrep
 from enum import Enum
 import sympy as sp
 import numpy as np
+import time
 
 
 class ConfigurationType(Enum):
@@ -16,6 +17,11 @@ class JacobianCalculation:
         self.q = sp.symbols('q_0:{}'.format(len(self.joint_handles)))
         self.Ts = []
         self.jacobian = sp.zeros(4, 9)
+        for joint_handle in self.joint_handles:  # initialize streaming
+            result, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
+        while result != vrep.simx_return_ok:
+            result, _ = vrep.simxGetJointPosition(self.clientID, self.joint_handles[0], vrep.simx_opmode_buffer)
+            time.sleep(0.01)
 
         if configuration_type == ConfigurationType.finger:
             objects_positions = []
@@ -27,16 +33,17 @@ class JacobianCalculation:
                 transformations = []
 
                 for index, joint_handle in enumerate(self.all_handles[:-task or None]):
-                    _, this_joint_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, -1,
-                                                                        vrep.simx_opmode_blocking)
                     last_element = bool(index == len(self.all_handles) - task - 1)
 
                     vector_this_object_position = objects_positions[index]
 
                     if last_element:
-                        transformations.append(sp.Matrix([[1, 0, 0, vector_this_object_position[0]],
-                                                          [0, 1, 0, vector_this_object_position[1]],
-                                                          [0, 0, 1, vector_this_object_position[2]],
+                        # we need the rotation here for some hand parts
+                        # for now this is fine
+                        last_translation = np.linalg.norm(objects_positions[index] - objects_positions[index - 1])
+                        transformations.append(sp.Matrix([[1, 0, 0, 0],
+                                                          [0, 1, 0, 0],
+                                                          [0, 0, 1, last_translation],
                                                           [0, 0, 0, 1]]))
                         continue
                     angle = -self.q[index]  # -angle, because the joints turn clockwise
@@ -73,9 +80,10 @@ class JacobianCalculation:
             print("Configuration not defined")
 
     def getJacobian(self):
+        # self.printTransformation()
         joint_positions = []
         for joint_handle in self.joint_handles:
-            _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_oneshot_wait)
+            _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_buffer)
             joint_positions.append(joint_position)
         return np.array(self.jacobian.subs(zip(self.q, joint_positions)), dtype='float')
         # return np.array(self.jacobian.subs(zip(self.q, joint_positions))).astype(dtype='float64')
@@ -83,6 +91,6 @@ class JacobianCalculation:
     def printTransformation(self):
         joint_positions = []
         for joint_handle in self.joint_handles:
-            _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_oneshot_wait)
+            _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_buffer)
             joint_positions.append(joint_position)
         print(self.Ts[0].subs(zip(self.q, joint_positions))[0:3, 3])

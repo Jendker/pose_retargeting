@@ -46,14 +46,19 @@ class Mapper:
             max_angle, min_angle = joint_limits
             self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
         self.last_human_hand_pose = self.__simulationObjectsPose(
-            self.finger_pose_handles)  # initialize with simulation pose
+            self.finger_pose_handles, mode=vrep.simx_opmode_blocking)  # initialize with simulation pose
         self.last_callback_time = 0  # 0 means no callback yet
         self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
-        self.damping_matrix = np.identity(3 * self.tasks_count) * 0.03  # with size of the task descriptor dimension
+        self.damping_matrix = np.identity(3 * self.tasks_count) * 0.001  # with size of the task descriptor dimension
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
         self.dummy_targets_handles = self.__createTargetDummies()
+        self.last_update = time.time()
+        for joint_handle in self.list_joints_handles:  # initialize streaming
+            _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
+        for handle in self.finger_pose_handles:
+            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_streaming)
 
         self.simulationFingerLength = 0.096
 
@@ -82,7 +87,9 @@ class Mapper:
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(4)
         for index, joint_handle in enumerate(self.list_joints_handles):
-            _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_oneshot_wait)
+            result, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_buffer)
+            if result != vrep.simx_return_ok:
+                continue
             joint_max, joint_min = self.joints_limits[index]
             if joint_max == joint_position or joint_min == joint_position:
                 performance_gradient = float("inf")
@@ -97,10 +104,10 @@ class Mapper:
             weight_matrix[index, index] = w
         self.weight_matrix_inv = inv(weight_matrix)
 
-    def __simulationObjectsPose(self, handles):
+    def __simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
         current_pos = []
         for handle in handles:
-            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_blocking)
+            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, mode)
             current_pos.extend(this_current_pos)
         return np.array(current_pos)
 
@@ -283,7 +290,7 @@ class Mapper:
 
     def __executeInverseOnce(self):
         error = self.__getError()
-        self.__updateWeightMatrixInverse()
+        # self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
         q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
         self.__setJointsTargetVelocity(q_vel)
@@ -294,4 +301,5 @@ class Mapper:
         while not rospy.is_shutdown():
             self.__executeInverseOnce()
             time.sleep(self.sampling_time - ((time.time() - start_time) % self.sampling_time))
+            self.last_update = time.time()
         self.cleanup()
