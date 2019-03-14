@@ -76,8 +76,13 @@ class JacobianCalculation:
                 self.Ts.append(T)
                 this_jacobian = T[0:3, 3].T.jacobian(sp.Matrix(self.q)).T
                 self.jacobian[:, task * 3: task * 3 + 3] = this_jacobian
+            self.jacobian = sp.simplify(self.jacobian)
+            self.f = sp.lambdify(self.q, self.jacobian)
         else:
             print("Configuration not defined")
+
+    def updateClientID(self, clientID):
+        self.clientID = clientID
 
     def getJacobian(self):
         # self.printTransformation()
@@ -85,8 +90,9 @@ class JacobianCalculation:
         for joint_handle in self.joint_handles:
             _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_buffer)
             joint_positions.append(joint_position)
-        return np.array(self.jacobian.subs(zip(self.q, joint_positions)), dtype='float')
-        # return np.array(self.jacobian.subs(zip(self.q, joint_positions))).astype(dtype='float64')
+
+        result = self.f(*joint_positions)
+        return result
 
     def printTransformation(self):
         joint_positions = []

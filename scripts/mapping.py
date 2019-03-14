@@ -10,7 +10,7 @@ def run():
     mapper = Mapper()
     rospy.Subscriber("/dl_pose_estimation/joints_position", JointsPosition, mapper.callback)
 
-    mapper.execute()  # keeps program running in loop
+    mapper.execute()
 
 
 if __name__ == '__main__':

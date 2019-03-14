@@ -12,6 +12,7 @@ from visualization_msgs.msg import Marker
 import geometry_msgs.msg
 import tf_conversions
 from jacobian_calculation import JacobianCalculation, ConfigurationType
+from threading import Thread
 
 def degToRad(angle):
     return angle / 180.0 * math.pi
@@ -19,11 +20,16 @@ def degToRad(angle):
 
 class Mapper:
     def __init__(self):
+        self.initialized = False
         vrep.simxFinish(-1)  # just in case, close all opened connections
         self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
+        while self.clientID == -1:
+            rospy.loginfo("No connection to remote API server, retrying...")
+            vrep.simxFinish(-1)
+            time.sleep(3)
+            self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
+        rospy.loginfo('Connected to remote API server')
         self.tasks_count = 3
-        if self.clientID != -1:
-            rospy.loginfo('Connected to remote API server')
         self.K_matrix = np.identity(3 * self.tasks_count)
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
         self.sampling_time = 0.03  # in seconds
@@ -63,10 +69,22 @@ class Mapper:
         self.simulationFingerLength = 0.096
 
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
+        self.initialized = True
+        # self.execution_thread = Thread(target=self.execute)
+        # self.execution_thread.start()
+        self.errors_in_connection = 0
 
-    def cleanup(self):
-        for dummy_handle in self.dummy_targets_handles:
-            vrep.simxRemoveObject(self.clientID, dummy_handle, vrep.simx_opmode_blocking)
+    def __del__(self):
+        if self.initialized:
+            for dummy_handle in self.dummy_targets_handles:
+                vrep.simxRemoveObject(self.clientID, dummy_handle, vrep.simx_opmode_blocking)
+            # self.execution_thread.join()
+        # Before closing the connection to V-REP, make sure that the last command sent out had time to arrive
+        # not needed now, previous function is blocking
+        # vrep.simxGetPingTime(self.clientID)
+
+        # Close the connection to V-REP:
+        vrep.simxFinish(self.clientID)
 
     def __createTargetDummies(self):
         dummy_targets = []
@@ -115,8 +133,15 @@ class Mapper:
         for index, velocity in enumerate(joints_velocities):
             result = vrep.simxSetJointTargetVelocity(self.clientID, self.list_joints_handles[index], velocity,
                                                      vrep.simx_opmode_oneshot)
-            if result != 0 and not self.first_inverse_calculation:
-                rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
+            if result != 0:
+                if not self.first_inverse_calculation:
+                    self.errors_in_connection += 1
+                    if self.errors_in_connection > 10:
+                        rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
+                        rospy.loginfo("Probably no connection with remote API server. Exiting.")
+                        exit(1)
+                else:
+                    time.sleep(0.5)
 
     def __getError(self):
         current_pose = self.__simulationObjectsPose(self.finger_pose_handles)
@@ -286,7 +311,6 @@ class Mapper:
             self.last_callback_time = current_time
         self.last_human_hand_pose = new_HPE_finger_pose
         self.__updateTargetDummiesPoses()
-        self.__publishMarkers(self.node_frame_name)
 
     def __executeInverseOnce(self):
         error = self.__getError()
@@ -302,4 +326,3 @@ class Mapper:
             self.__executeInverseOnce()
             time.sleep(self.sampling_time - ((time.time() - start_time) % self.sampling_time))
             self.last_update = time.time()
-        self.cleanup()
