@@ -29,10 +29,6 @@ class Mapper:
             time.sleep(3)
             self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
         rospy.loginfo('Connected to remote API server')
-        self.tasks_count = 3
-        self.K_matrix = np.identity(3 * self.tasks_count)
-        self.human_hand_vel = np.zeros(3 * self.tasks_count)
-        self.sampling_time = 0.03  # in seconds
         _, self.finger_tip_handle = vrep.simxGetObjectHandle(self.clientID, 'ITIP_tip', vrep.simx_opmode_blocking)
         _, self.IDIP_joint_handle = vrep.simxGetObjectHandle(self.clientID, 'IDIP_joint', vrep.simx_opmode_blocking)
         _, self.IPIP_joint_handle = vrep.simxGetObjectHandle(self.clientID, 'IPIP_joint', vrep.simx_opmode_blocking)
@@ -42,12 +38,16 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IMCP_side_joint_handle, self.IMCP_front_joint_handle,
                                     self.IPIP_joint_handle, self.IDIP_joint_handle]
-        self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle, self.IPIP_joint_handle]
+        self.finger_pose_handles = [self.finger_tip_handle]
+        self.tasks_count = len(self.finger_pose_handles)
+        self.K_matrix = np.identity(3 * self.tasks_count)
+        self.human_hand_vel = np.zeros(3 * self.tasks_count)
+        self.sampling_time = 0.03  # in seconds
         self.last_human_hand_pose = self.__simulationObjectsPose(
             self.finger_pose_handles, mode=vrep.simx_opmode_blocking)  # initialize with simulation pose
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.finger_tip_handle)
-        self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc, ConfigurationType.finger)
+        self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc, self.finger_pose_handles, ConfigurationType.finger)
         for joint_handle in self.list_joints_handles:  # initialize streaming
             _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
         for handle in self.finger_pose_handles:
@@ -139,7 +139,7 @@ class Mapper:
                     if self.errors_in_connection > 10:
                         rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
                         rospy.loginfo("Probably no connection with remote API server. Exiting.")
-                        exit(1)
+                        exit(0)
                 else:
                     time.sleep(0.5)
 
@@ -149,7 +149,8 @@ class Mapper:
 
     def __getPseudoInverseJacobian(self):
         jacobian = self.jacobian_calculation.getJacobian()
-        jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T, jacobian[..., 6:9].T), axis=0)
+        # jacobian = np.concatenate(jacobian[..., 0:3].T, axis=1)
+        jacobian = jacobian.T
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, inv(
             np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
 
@@ -300,9 +301,8 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         self.last_data = self.__scaleHandData(data)  # ready to save after scaling
-        HPE_finger_tip_pose = np.concatenate((self.last_data.joints_position[11], self.last_data.joints_position[10],
-                                              self.last_data.joints_position[9]))
-        new_HPE_finger_pose = HPE_finger_tip_pose * 0.2 + self.last_human_hand_pose * 0.8
+        HPE_finger_pose = self.last_data.joints_position[11]
+        new_HPE_finger_pose = HPE_finger_pose * 0.2 + self.last_human_hand_pose * 0.8
         if self.last_callback_time != 0:
             self.human_hand_vel = (new_HPE_finger_pose - self.last_human_hand_pose) / (
                     current_time - self.last_callback_time)

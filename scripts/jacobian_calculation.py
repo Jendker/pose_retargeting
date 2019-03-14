@@ -10,13 +10,14 @@ class ConfigurationType(Enum):
 
 
 class JacobianCalculation:
-    def __init__(self, clientID, joint_handles, configuration_type):
+    def __init__(self, clientID, joint_handles, task_objects_handles, configuration_type):
         self.clientID = clientID
         self.joint_handles = joint_handles[:-1]
+        self.task_object_handles = task_objects_handles
         self.all_handles = joint_handles[:]  # contains also finger tip
         self.q = sp.symbols('q_0:{}'.format(len(self.joint_handles)))
         self.Ts = []
-        self.jacobian = sp.zeros(4, 9)
+        self.jacobian = sp.zeros(4, 3 * len(self.task_object_handles))
         for joint_handle in self.joint_handles:  # initialize streaming
             result, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
         while result != vrep.simx_return_ok:
@@ -29,7 +30,7 @@ class JacobianCalculation:
                 _, this_object_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, -1,
                                                                      vrep.simx_opmode_blocking)
                 objects_positions.append(np.array(this_object_position))
-            for task in range(0, 3):
+            for task in range(0, len(self.task_object_handles)):
                 transformations = []
 
                 for index, joint_handle in enumerate(self.all_handles[:-task or None]):
