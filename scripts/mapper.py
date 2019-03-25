@@ -8,7 +8,7 @@ import math
 import rospy
 import tf2_ros
 from geometry_msgs.msg import Point
-from visualization_msgs.msg import Marker
+from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
 import tf_conversions
 from jacobian_calculation import JacobianCalculation, ConfigurationType
@@ -65,10 +65,11 @@ class Mapper:
         self.first_inverse_calculation = True
         self.dummy_targets_handles = self.__createTargetDummies()
         self.last_update = time.time()
+        self.using_left_hand = rospy.get_param('transformation/left_hand')
 
         self.simulationFingerLength = 0.096
 
-        self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', Marker, queue_size=10)
+        self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
         self.initialized = True
         # self.execution_thread = Thread(target=self.execute)
         # self.execution_thread.start()
@@ -240,24 +241,30 @@ class Mapper:
             pointList.append(np.array(this_point))
         return pointList
 
-    def __publishMarkers(self, target_frame):
-        message = Marker()
-        message.header.frame_id = target_frame
-        message.header.stamp = rospy.Time.now()
-        message.color.r = 1.0
-        # message.color.g = 1.0
-        message.color.a = 1.0
-        message.scale.x = message.scale.y = message.scale.z = 0.01
-        message.type = message.LINE_STRIP
+    def __publishMarkers(self):
+        message = MarkerArray()
+        lines = [[2, 9, 10, 11], [3, 12, 13, 14], [4, 15, 16, 17], [5, 18, 19, 20], [6, 7, 8], [0, 1, 6, 2, 3, 4, 5, 0]]
+        time_now = rospy.Time.now()
+        for index, line_points in enumerate(lines):
+            line_marker = Marker()
+            line_marker.header.frame_id = self.node_frame_name
+            line_marker.header.stamp = time_now
+            line_marker.id = index
+            line_marker.color.r = 1.0
+            # message.color.g = 1.0
+            line_marker.color.a = 1.0
+            line_marker.scale.x = line_marker.scale.y = line_marker.scale.z = 0.01
+            line_marker.type = line_marker.LINE_STRIP
 
-        index_finger_points = [self.last_data.joints_position[2]]
-        index_finger_points.extend(self.last_data.joints_position[9:12])
-        for point in index_finger_points:
-            message_point = Point()
-            message_point.x = point[0]
-            message_point.y = point[1]
-            message_point.z = point[2]
-            message.points.append(message_point)
+            finger_points = [self.last_data.joints_position[x] for x in line_points]
+
+            for point in finger_points:
+                message_point = Point()
+                message_point.x = point[0]
+                message_point.y = point[1]
+                message_point.z = point[2]
+                line_marker.points.append(message_point)
+            message.markers.append(line_marker)
         self.marker_pub.publish(message)
 
     def __publishTransformation(self, data):
@@ -309,8 +316,17 @@ class Mapper:
         br.sendTransform(t)
         return transformation_matrix
 
+    def __mirrorData(self, data):
+        new_data = data
+        for index, joint_position in enumerate(new_data.joints_position):
+            new_data.joints_position[index].x = -new_data.joints_position[index].x # + 2 * vector
+
+        return data
+
     def callback(self, data):
         current_time = time.time()
+        if self.using_left_hand:
+            data = self.__mirrorData(data)
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         self.last_data = self.__scaleHandData(data)  # ready to save after scaling
@@ -324,6 +340,7 @@ class Mapper:
             self.last_callback_time = current_time
         self.last_human_hand_pose = new_HPE_finger_pose
         self.__updateTargetDummiesPoses()
+        self.__publishMarkers()
 
     def __executeInverseOnce(self):
         error = self.__getError()
