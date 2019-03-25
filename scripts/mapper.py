@@ -175,7 +175,7 @@ class Mapper:
     def __getRotationMatrixFromVectors(self, desired_vector, given_vector):
         desired_vector = desired_vector / np.linalg.norm(desired_vector)
         given_vector = given_vector / np.linalg.norm(given_vector)
-        rotation_axis = np.cross(desired_vector, given_vector)
+        rotation_axis = np.cross(given_vector, desired_vector)
         c = np.dot(given_vector, desired_vector)
         if c == -1:
             return np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
@@ -269,19 +269,32 @@ class Mapper:
         t.child_frame_id = self.node_frame_name
 
         position_knuckle_index_finger = data.joints_position[2]
-        transform_to_position_base = np.array([-0.033, +0.0099, -0.352])
+        translation_to_base = np.array([-0.033, +0.0099, -0.352])
+        # translation_to_base = np.array([0, 0, 0])
         vectorized_palm_base = self.__getPositionVectorForDataIndex(data, 0)
-        vectorized_middle_knuckle = self.__getPositionVectorForDataIndex(data, 3)
-        vector_hand = vectorized_middle_knuckle - vectorized_palm_base
+        vectorized_ring_knuckle = self.__getPositionVectorForDataIndex(data, 4)
+        vectorized_index_knuckle = self.__getPositionVectorForDataIndex(data, 2)
+        vector_hand = vectorized_ring_knuckle - vectorized_palm_base
 
-        rotation_matrix = self.__getRotationMatrixFromVectors(np.array([0, 0, 1]), vector_hand)
-        rotated_transform_to_position_base = np.dot(rotation_matrix, transform_to_position_base)
+        rotation_matrix = self.__getRotationMatrixFromVectors(vector_hand, np.array([0, 0, 1]))
+        vector_finger_line_robot_coord = np.dot(inv(rotation_matrix), vectorized_index_knuckle - vectorized_ring_knuckle)
+        cross_finger_line = np.dot(self.skew(vector_finger_line_robot_coord), np.array([0, 0, 1]))
+        cross_finger_line[2] = 0.
+        cross_finger_line = cross_finger_line / np.linalg.norm(cross_finger_line)
+        angle = -math.acos(np.dot(cross_finger_line, np.array([0, -1, 0])))
+        rotation_around_z_matrix = [[math.cos(angle), -math.sin(angle), 0],
+                                    [math.sin(angle), math.cos(angle), 0],
+                                    [0, 0, 1]]
 
-        translation_vector = np.array([position_knuckle_index_finger.x + rotated_transform_to_position_base[0],
-                                       position_knuckle_index_finger.y + rotated_transform_to_position_base[1],
-                                       position_knuckle_index_finger.z + rotated_transform_to_position_base[2]])
+        rotation_matrix = np.dot(rotation_matrix, rotation_around_z_matrix)
 
-        transformation_matrix = self.__euclideanTransformation(rotation_matrix, translation_vector)
+        rotated_translation_to_base = np.dot(rotation_matrix, translation_to_base)
+
+        translation_vector = np.array([position_knuckle_index_finger.x + rotated_translation_to_base[0],
+                                       position_knuckle_index_finger.y + rotated_translation_to_base[1],
+                                       position_knuckle_index_finger.z + rotated_translation_to_base[2]])
+
+        transformation_matrix = self.__euclideanTransformation(rotation_matrix, translation_vector)  #
 
         t.transform.translation.x = translation_vector[0]
         t.transform.translation.y = translation_vector[1]
