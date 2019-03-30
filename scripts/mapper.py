@@ -43,9 +43,14 @@ class Mapper:
                                                                   vrep.simx_opmode_blocking)
         self.list_joints_handles = [self.IMCP_side_joint_handle, self.IMCP_front_joint_handle,
                                     self.IPIP_joint_handle, self.IDIP_joint_handle]
-        self.finger_pose_handles = [self.finger_tip_handle]
+        self.DOF_count = len(self.list_joints_handles)
+        # self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle]
+        # self.finger_pose_equivalent_hpe_indices = [11, 10]
+        self.finger_pose_handles = [self.IPIP_joint_handle, self.finger_tip_handle]
+        self.finger_pose_equivalent_hpe_indices = [9, 11]
         self.tasks_count = len(self.finger_pose_handles)
-        self.K_matrix = np.identity(3 * self.tasks_count)
+        # self.K_matrix = np.identity(3 * self.tasks_count)
+        self.K_matrix = np.identity(3)  # for prioritization we use just single error
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
         self.sampling_time = 0.03  # in seconds
         self.last_human_hand_pose = self.__simulationObjectsPose(
@@ -64,8 +69,9 @@ class Mapper:
             max_angle, min_angle = joint_limits
             self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
         self.last_callback_time = 0  # 0 means no callback yet
-        self.weight_matrix_inv = np.identity(4)  # with size of the count of DOF
-        self.damping_matrix = np.identity(3 * self.tasks_count) * 0.001  # with size of the task descriptor dimension
+        self.weight_matrix_inv = np.identity(self.DOF_count)
+        # self.damping_matrix = np.identity(3 * self.tasks_count) * 0.001  # with size of the task descriptor dimension
+        self.damping_matrix = np.identity(3) * 0.001  # for prioritization we use just single error
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
@@ -155,16 +161,31 @@ class Mapper:
                 else:
                     time.sleep(0.5)
 
-    def __getError(self):
-        current_pose = self.__simulationObjectsPose(self.finger_pose_handles)
-        return self.last_human_hand_pose - current_pose
+    def __getError(self, index=None):
+        if index is None:
+            current_pose = self.__simulationObjectsPose(self.finger_pose_handles)
+            return self.last_human_hand_pose - current_pose
+        else:
+            current_pose = self.__simulationObjectsPose([self.finger_pose_handles[index]])
+            return self.last_human_hand_pose[index*3:index*3+3] - current_pose
 
     def __getPseudoInverseJacobian(self):
         jacobian = self.jacobian_calculation.getJacobian()
-        # jacobian = np.concatenate(jacobian[..., 0:3].T, axis=1)
-        jacobian = jacobian.T
+        jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T), axis=0)
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, inv(
             np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
+
+    def __getPseudoInverseForTaskPrioritization(self):
+        whole_jacobian = self.jacobian_calculation.getJacobian()
+        jacobians = []
+        pseudo_jacobian_inverses = []
+        for task_index, _ in enumerate(self.finger_pose_handles):
+            this_jacobian = whole_jacobian[..., task_index*3:task_index*3+3].T
+            jacobians.append(this_jacobian)
+            this_pseudo_jacobian_inverse = np.linalg.multi_dot([self.weight_matrix_inv, this_jacobian.T, inv(
+                np.linalg.multi_dot([this_jacobian, self.weight_matrix_inv, this_jacobian.T]) + self.damping_matrix)])
+            pseudo_jacobian_inverses.append(this_pseudo_jacobian_inverse)
+        return pseudo_jacobian_inverses, jacobians
 
     def __getJacobian(self):
         empty_buff = bytearray()
@@ -368,7 +389,11 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         self.last_data = self.__scaleHandData(data)  # ready to save after scaling
-        HPE_finger_pose = self.last_data.joints_position[11]
+
+        finger_poses = []
+        for index in self.finger_pose_equivalent_hpe_indices:
+            finger_poses.append(self.last_data.joints_position[index])
+        HPE_finger_pose = np.concatenate(finger_poses)
         new_HPE_finger_pose = HPE_finger_pose * 0.2 + self.last_human_hand_pose * 0.8
         if self.last_callback_time != 0:
             self.human_hand_vel = (new_HPE_finger_pose - self.last_human_hand_pose) / (
@@ -380,12 +405,27 @@ class Mapper:
         self.__updateTargetDummiesPoses()
         self.__publishMarkers()
 
-    def __executeInverseOnce(self):
-        error = self.__getError()
+    def taskPrioritization(self):
         # self.__updateWeightMatrixInverse()
-        pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
-        q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
+        pseudo_inverse_jacobians, jacobians = self.__getPseudoInverseForTaskPrioritization()
+        q_vel = np.zeros(self.DOF_count)
+        for index, task_handle in enumerate(self.finger_pose_handles):
+            error = self.__getError(index)
+            if index > 0:
+                this_pseudo_inverse = np.dot(np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index-1], jacobians[index-1]), pseudo_inverse_jacobians[index])
+            else:
+                this_pseudo_inverse = pseudo_inverse_jacobians[index]
+            q_vel = q_vel + np.dot(this_pseudo_inverse, (self.human_hand_vel[index*3:index*3+3] + np.dot(self.K_matrix, error)))
         self.__setJointsTargetVelocity(q_vel)
+
+    def __executeInverseOnce(self):
+        # error = self.__getError()
+        # # self.__updateWeightMatrixInverse()
+        # pseudo_inverse_jacobian = self.__getPseudoInverseJacobian()
+        # q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
+        # self.__setJointsTargetVelocity(q_vel)
+        # self.first_inverse_calculation = False
+        self.taskPrioritization()
         self.first_inverse_calculation = False
 
     def execute(self):
