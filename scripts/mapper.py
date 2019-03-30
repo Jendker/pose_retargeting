@@ -14,8 +14,13 @@ import tf_conversions
 from jacobian_calculation import JacobianCalculation, ConfigurationType
 from threading import Thread
 
+
 def degToRad(angle):
     return angle / 180.0 * math.pi
+
+
+def isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
 class Mapper:
@@ -47,7 +52,8 @@ class Mapper:
             self.finger_pose_handles, mode=vrep.simx_opmode_blocking)  # initialize with simulation pose
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.finger_tip_handle)
-        self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc, self.finger_pose_handles, ConfigurationType.finger)
+        self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc,
+                                                        self.finger_pose_handles, ConfigurationType.finger)
         for joint_handle in self.list_joints_handles:  # initialize streaming
             _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
         for handle in self.finger_pose_handles:
@@ -76,9 +82,12 @@ class Mapper:
         self.errors_in_connection = 0
 
     def __del__(self):
+        zero_velocities = np.zeros(np.shape(self.list_joints_handles))
+        self.__setJointsTargetVelocity(zero_velocities)
         if self.initialized:
             for dummy_handle in self.dummy_targets_handles:
                 vrep.simxRemoveObject(self.clientID, dummy_handle, vrep.simx_opmode_blocking)
+
             # self.execution_thread.join()
         # Before closing the connection to V-REP, make sure that the last command sent out had time to arrive
         # not needed now, previous function is blocking
@@ -90,7 +99,9 @@ class Mapper:
     def __createTargetDummies(self):
         dummy_targets = []
         for i in range(0, self.tasks_count):
-            _, dummy_target = vrep.simxCreateDummy(self.clientID, 0.02, [255 * (i % 3), 255 * ((i+1) % 3), 255 * ((i+2) % 3), 255], vrep.simx_opmode_blocking)
+            _, dummy_target = vrep.simxCreateDummy(self.clientID, 0.02,
+                                                   [255 * (i % 3), 255 * ((i + 1) % 3), 255 * ((i + 2) % 3), 255],
+                                                   vrep.simx_opmode_blocking)
             dummy_targets.append(dummy_target)
         return dummy_targets
 
@@ -191,13 +202,9 @@ class Mapper:
         return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
 
     def __transformDataWithTransform(self, data, transformation_matrix):
-        rotation_matrix = transformation_matrix[0:3, 0:3]
-        translation_vector = transformation_matrix[0:3, 3]
-        inverse_transformation_matrix = self.__euclideanTransformation(rotation_matrix.T,
-                                                                       np.dot(-rotation_matrix.T, translation_vector))
         points_return = []
         for index, _ in enumerate(data.joints_position):
-            vector_transformed = np.dot(inverse_transformation_matrix,
+            vector_transformed = np.dot(transformation_matrix,
                                         np.append(self.__getPositionVectorForDataIndex(data, index), [1]))[0:3]
             points_return.append(vector_transformed)
         data_return = data
@@ -205,6 +212,15 @@ class Mapper:
         data_return.header.frame_id = self.node_frame_name
         data_return.header.stamp = rospy.Time.now()
         return data_return
+
+    def __transformPointWithTransform(self, point, transformation_matrix):
+        rotation_matrix = transformation_matrix[0:3, 0:3]
+        translation_vector = transformation_matrix[0:3, 3]
+        inverse_transformation_matrix = self.__euclideanTransformation(rotation_matrix.T,
+                                                                       np.dot(-rotation_matrix.T, translation_vector))
+        vector_transformed = np.dot(inverse_transformation_matrix,
+                                    np.append(point, [1]))[0:3]
+        return vector_transformed
 
     def __getFingerLength(self, data, indices):
         if len(indices) != 4:
@@ -267,6 +283,43 @@ class Mapper:
             message.markers.append(line_marker)
         self.marker_pub.publish(message)
 
+    def __correspondancePointsTransformation(self, from_set, to_set):
+        num = from_set.shape[0]
+        dim = from_set.shape[1]
+        mean_from_set = from_set.mean(axis=0)
+        from_zero_mean_set = from_set - mean_from_set
+        mean_to_set = to_set.mean(axis=0)
+        to_zero_mean_set = to_set - mean_to_set
+
+        D = np.dot(to_zero_mean_set.T, from_zero_mean_set) / num  # eq. 38
+
+        from_set_variance = from_set.var(axis=0).sum()
+
+        U, Sigma, Vt = np.linalg.svd(D)
+        rank = np.linalg.matrix_rank(D)
+        S = np.identity(dim, dtype=np.double)
+        if np.linalg.det(D) < 0:
+            S[dim-1, dim-1] = -1.
+        if rank == 0:
+            return np.full([dim+1, dim+1], np.nan)
+        if rank >= dim-1:
+            scaling = 1. / from_set_variance * np.trace(np.dot(np.diag(Sigma), S))
+            if rank == 2:
+                if np.isclose(np.linalg.det(U) * np.linalg.det(Vt), -1., 0.00001):
+                    S[dim-1, dim-1] = -1
+                else:
+                    S[dim-1, dim-1] = 1
+            rotation_matrix = np.linalg.multi_dot([U, S, Vt])
+            translation = mean_to_set - scaling * np.dot(rotation_matrix, mean_from_set)
+            correct_rotation_matrix = rotation_matrix.copy()
+            rotation_matrix *= scaling
+            return self.__euclideanTransformation(rotation_matrix, translation),  self.__euclideanTransformation(correct_rotation_matrix, translation)
+        else:
+            rospy.logfatal("Transformation between the points not defined!")
+            exit(1)
+
+
+
     def __publishTransformation(self, data):
         br = tf2_ros.TransformBroadcaster()
         t = geometry_msgs.msg.TransformStamped()
@@ -277,37 +330,22 @@ class Mapper:
 
         position_knuckle_index_finger = data.joints_position[2]
         translation_to_base = np.array([-0.033, +0.0099, -0.352])
-        # translation_to_base = np.array([0, 0, 0])
-        vectorized_palm_base = self.__getPositionVectorForDataIndex(data, 0)
-        vectorized_ring_knuckle = self.__getPositionVectorForDataIndex(data, 4)
-        vectorized_index_knuckle = self.__getPositionVectorForDataIndex(data, 2)
-        vector_hand = vectorized_ring_knuckle - vectorized_palm_base
+        finger_indices = [2, 3, 4, 5, 0, 1]  # palm base, index, middle, ring, little, thumb - 6
+        world_points = []
+        for index in finger_indices:
+            world_points.append(self.__getPositionVectorForDataIndex(data, index))
 
-        rotation_matrix = self.__getRotationMatrixFromVectors(vector_hand, np.array([0, 0, 1]))
-        vector_finger_line_robot_coord = np.dot(inv(rotation_matrix), vectorized_index_knuckle - vectorized_ring_knuckle)
-        cross_finger_line = np.dot(self.skew(vector_finger_line_robot_coord), np.array([0, 0, 1]))
-        cross_finger_line[2] = 0.
-        cross_finger_line = cross_finger_line / np.linalg.norm(cross_finger_line)
-        angle = -math.acos(np.dot(cross_finger_line, np.array([0, -1, 0])))
-        rotation_around_z_matrix = [[math.cos(angle), -math.sin(angle), 0],
-                                    [math.sin(angle), math.cos(angle), 0],
-                                    [0, 0, 1]]
+        vrep_points = [np.array([0.033, -.0099, 0.352]), np.array([0.011, -0.0099, .356]), np.array([-.011, -.0099, .352]),
+                       np.array([-0.033, -.0099, .3436]), np.array([-0.01, -0.0145, 0.27]), np.array([0.03, -0.0145, 0.27])]
 
-        rotation_matrix = np.dot(rotation_matrix, rotation_around_z_matrix)
+        transformation_matrix, correct_rotation_matrix = self.__correspondancePointsTransformation(np.array(world_points), np.array(vrep_points))
 
-        rotated_translation_to_base = np.dot(rotation_matrix, translation_to_base)
+        # transform publishing
+        t.transform.translation.x = transformation_matrix[0, 3]
+        t.transform.translation.y = transformation_matrix[1, 3]
+        t.transform.translation.z = transformation_matrix[2, 3]
 
-        translation_vector = np.array([position_knuckle_index_finger.x + rotated_translation_to_base[0],
-                                       position_knuckle_index_finger.y + rotated_translation_to_base[1],
-                                       position_knuckle_index_finger.z + rotated_translation_to_base[2]])
-
-        transformation_matrix = self.__euclideanTransformation(rotation_matrix, translation_vector)  #
-
-        t.transform.translation.x = translation_vector[0]
-        t.transform.translation.y = translation_vector[1]
-        t.transform.translation.z = translation_vector[2]
-
-        q = tf_conversions.transformations.quaternion_from_matrix(transformation_matrix)
+        q = tf_conversions.transformations.quaternion_from_matrix(correct_rotation_matrix)
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
@@ -319,7 +357,7 @@ class Mapper:
     def __mirrorData(self, data):
         new_data = data
         for index, joint_position in enumerate(new_data.joints_position):
-            new_data.joints_position[index].x = -new_data.joints_position[index].x # + 2 * vector
+            new_data.joints_position[index].x = -new_data.joints_position[index].x
 
         return data
 
