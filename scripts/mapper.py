@@ -12,7 +12,6 @@ from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
 import tf_conversions
 from jacobian_calculation import JacobianCalculation, ConfigurationType
-from threading import Thread
 
 
 def degToRad(angle):
@@ -29,6 +28,8 @@ class Mapper:
         vrep.simxFinish(-1)  # just in case, close all opened connections
         self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
         while self.clientID == -1:
+            if rospy.is_shutdown():
+                return
             rospy.loginfo("No connection to remote API server, retrying...")
             vrep.simxFinish(-1)
             time.sleep(3)
@@ -48,6 +49,7 @@ class Mapper:
         # self.finger_pose_equivalent_hpe_indices = [11, 10]
         self.finger_pose_handles = [self.IPIP_joint_handle, self.finger_tip_handle]
         self.finger_pose_equivalent_hpe_indices = [9, 11]
+        self.base_handles = [self.IMCP_side_joint_handle, self.IMCP_side_joint_handle]
         self.tasks_count = len(self.finger_pose_handles)
         # self.K_matrix = np.identity(3 * self.tasks_count)
         self.K_matrix = np.identity(3)  # for prioritization we use just single error
@@ -58,7 +60,7 @@ class Mapper:
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.finger_tip_handle)
         self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc,
-                                                        self.finger_pose_handles, ConfigurationType.finger)
+                                                        zip(self.finger_pose_handles, self.base_handles), ConfigurationType.finger)
         for joint_handle in self.list_joints_handles:  # initialize streaming
             _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
         for handle in self.finger_pose_handles:

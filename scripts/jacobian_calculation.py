@@ -3,6 +3,7 @@ from enum import Enum
 import sympy as sp
 import numpy as np
 import time
+import rospy
 
 
 class ConfigurationType(Enum):
@@ -10,14 +11,15 @@ class ConfigurationType(Enum):
 
 
 class JacobianCalculation:
-    def __init__(self, clientID, joint_handles, task_objects_handles, configuration_type):
+    def __init__(self, clientID, transformation_handles, task_objects_handles_and_bases, configuration_type):
         self.clientID = clientID
-        self.joint_handles = joint_handles[:-1]
-        self.task_object_handles = task_objects_handles
-        self.all_handles = joint_handles[:]  # contains also finger tip
+        self.joint_handles = transformation_handles[:-1]
+        self.task_object_handles_and_bases = task_objects_handles_and_bases
+        self.all_handles = transformation_handles[:]  # contains also finger tip
         self.q = sp.symbols('q_0:{}'.format(len(self.joint_handles)))
+        self.joint_handle_q_map = dict(zip(self.joint_handles, self.q))
         self.Ts = []
-        self.jacobian = sp.zeros(4, 3 * len(self.task_object_handles))
+        self.jacobian = sp.zeros(4, 3 * len(self.task_object_handles_and_bases))
         for joint_handle in self.joint_handles:  # initialize streaming
             result, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
         while result != vrep.simx_return_ok:
@@ -25,29 +27,42 @@ class JacobianCalculation:
             time.sleep(0.01)
 
         if configuration_type == ConfigurationType.finger:
-            objects_positions = []
-            for index, joint_handle in enumerate(self.all_handles):
+            objects_positions = {}
+            for joint_handle in self.all_handles:
                 _, this_object_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, -1,
                                                                      vrep.simx_opmode_blocking)
-                objects_positions.append(np.array(this_object_position))
-            for task in range(0, len(self.task_object_handles)):
+                objects_positions[joint_handle] = np.array(this_object_position)
+            for task_index, [target_handle, base_handle] in enumerate(self.task_object_handles_and_bases):
                 transformations = []
+                transformation_handles = []
+                for handle in self.all_handles:
+                    if not transformation_handles:  # if empty
+                        if handle == base_handle:
+                            transformation_handles.append(handle)
+                    else:
+                        transformation_handles.append(handle)
+                        if handle == target_handle:
+                            break
 
-                for index, joint_handle in enumerate(self.all_handles[:-task or None]):
-                    last_element = bool(index == len(self.all_handles) - task - 1)
+                if not transformation_handles:
+                    str = "No base handle found for transformation %d. Skipping." % task_index
+                    rospy.logwarn(str)
+                    continue
 
-                    vector_this_object_position = objects_positions[index]
+                for index, joint_handle in enumerate(transformation_handles):
+                    vector_this_object_position = objects_positions[joint_handle]
 
-                    if last_element:
+                    if joint_handle == target_handle:
                         # we need the rotation here for some hand parts
                         # for now this is fine
-                        last_translation = np.linalg.norm(objects_positions[index] - objects_positions[index - 1])
+                        last_translation = np.linalg.norm(objects_positions[transformation_handles[index]] -
+                                                          objects_positions[transformation_handles[index - 1]])
                         transformations.append(sp.Matrix([[1, 0, 0, 0],
                                                           [0, 1, 0, 0],
                                                           [0, 0, 1, last_translation],
                                                           [0, 0, 0, 1]]))
                         continue
-                    angle = -self.q[index]  # -angle, because the joints turn clockwise
+                    angle = -self.joint_handle_q_map[joint_handle]  # -angle, because the joints turn clockwise
                     if index == 0:
                         transformations.append(sp.Matrix([[1, 0, 0, vector_this_object_position[0]],
                                                           [0, 1, 0, vector_this_object_position[1]],
@@ -63,8 +78,8 @@ class JacobianCalculation:
                                                           [0, 0, 0, 1]]))
                         continue
 
-                    length = np.linalg.norm(objects_positions[index] - objects_positions[index - 1])
-                    if index == 1:
+                    length = np.linalg.norm(objects_positions[transformation_handles[index]] - objects_positions[transformation_handles[index - 1]])
+                    if length < 0.03:
                         length = 0.
                     transformations.append(sp.Matrix([[1, 0, 0, 0],
                                                       [0, sp.cos(angle), -sp.sin(angle), sp.sin(angle) * length],
@@ -76,7 +91,7 @@ class JacobianCalculation:
                 T = sp.simplify(T)
                 self.Ts.append(T)
                 this_jacobian = T[0:3, 3].T.jacobian(sp.Matrix(self.q)).T
-                self.jacobian[:, task * 3: task * 3 + 3] = this_jacobian
+                self.jacobian[:, task_index * 3: task_index * 3 + 3] = this_jacobian
             self.jacobian = sp.simplify(self.jacobian)
             self.f = sp.lambdify(self.q, self.jacobian)
         else:
