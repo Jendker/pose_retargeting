@@ -73,7 +73,7 @@ class Mapper:
         self.last_callback_time = 0  # 0 means no callback yet
         self.weight_matrix_inv = np.identity(self.DOF_count)
         # self.damping_matrix = np.identity(3 * self.tasks_count) * 0.001  # with size of the task descriptor dimension
-        self.damping_matrix = np.identity(3) * 0.001  # for prioritization we use just single error
+        self.damping_matrix = np.identity(3) * 0.00001  # for prioritization we use just single error
         self.last_data = []
         self.node_frame_name = "hand_vrep"
         self.first_inverse_calculation = True
