@@ -79,8 +79,8 @@ class JacobianCalculation:
                         continue
 
                     length = np.linalg.norm(objects_positions[transformation_handles[index]] - objects_positions[transformation_handles[index - 1]])
-                    if length < 0.03:
-                        length = 0.
+                    # if length < 0.001:
+                    #     length = 0.
                     transformations.append(sp.Matrix([[1, 0, 0, 0],
                                                       [0, sp.cos(angle), -sp.sin(angle), sp.sin(angle) * length],
                                                       [0, sp.sin(angle), sp.cos(angle), sp.cos(angle) * length],

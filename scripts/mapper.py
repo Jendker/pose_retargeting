@@ -47,8 +47,8 @@ class Mapper:
         self.DOF_count = len(self.list_joints_handles)
         # self.finger_pose_handles = [self.finger_tip_handle, self.IDIP_joint_handle]
         # self.finger_pose_equivalent_hpe_indices = [11, 10]
-        self.finger_pose_handles = [self.IPIP_joint_handle, self.finger_tip_handle]
-        self.finger_pose_equivalent_hpe_indices = [9, 11]
+        self.finger_pose_handles = [self.finger_tip_handle, self.IPIP_joint_handle]
+        self.finger_pose_equivalent_hpe_indices = [11, 9]
         self.base_handles = [self.IMCP_side_joint_handle, self.IMCP_side_joint_handle]
         self.tasks_count = len(self.finger_pose_handles)
         # self.K_matrix = np.identity(3 * self.tasks_count)
@@ -411,13 +411,11 @@ class Mapper:
         # self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobians, jacobians = self.__getPseudoInverseForTaskPrioritization()
         q_vel = np.zeros(self.DOF_count)
+        multiplier = np.identity(self.DOF_count)
         for index, task_handle in enumerate(self.finger_pose_handles):
             error = self.__getError(index)
-            if index > 0:
-                this_pseudo_inverse = np.dot(np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index-1], jacobians[index-1]), pseudo_inverse_jacobians[index])
-            else:
-                this_pseudo_inverse = pseudo_inverse_jacobians[index]
-            q_vel = q_vel + np.dot(this_pseudo_inverse, (self.human_hand_vel[index*3:index*3+3] + np.dot(self.K_matrix, error)))
+            q_vel = q_vel + np.dot(np.dot(multiplier, pseudo_inverse_jacobians[index]), (self.human_hand_vel[index*3:index*3+3] + np.dot(self.K_matrix, error)))
+            multiplier = np.dot(multiplier, np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index], jacobians[index]))
         self.__setJointsTargetVelocity(q_vel)
 
     def __executeInverseOnce(self):
