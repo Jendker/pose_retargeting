@@ -66,6 +66,7 @@ class Mapper:
         for handle in self.finger_pose_handles:
             _, _ = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_streaming)
         joints_limits = [[10., -10.], [100., 0.], [90., 0.], [90., 0.]]
+        self.joint_velocity = np.zeros(self.DOF_count)
         self.joints_limits = []
         for joint_limits in joints_limits:
             max_angle, min_angle = joint_limits
@@ -128,17 +129,18 @@ class Mapper:
             result, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_buffer)
             if result != vrep.simx_return_ok:
                 continue
+            joint_velocity = self.joint_velocity[index]
             joint_max, joint_min = self.joints_limits[index]
-            if joint_max == joint_position or joint_min == joint_position:
-                performance_gradient = float("inf")
-            else:
-                performance_gradient = ((joint_max - joint_min) ** 2 * (
-                        2.0 * joint_position - joint_max - joint_min)) / float(
-                    4.0 * (joint_max - joint_position) ** 2 * (joint_position - joint_min) ** 2)
-            if performance_gradient > 1.0:
-                w = 1.0 + performance_gradient
-            else:
+            joint_middle = (joint_max + joint_min) / 2.0
+            going_away = bool((joint_position > joint_middle and joint_velocity < 0) or
+                              (joint_position < joint_middle and joint_velocity > 0))
+            if going_away:
                 w = 1.0
+            else:
+                performance_gradient = (((joint_max - joint_min) ** 2) * (2.0 * joint_position - joint_max - joint_min)
+                                        ) / float(4.0 * ((joint_max - joint_position) ** 2) * ((joint_position - joint_min) ** 2)
+                                                  + 0.0000001)
+                w = 1.0 + abs(performance_gradient)
             weight_matrix[index, index] = w
         self.weight_matrix_inv = inv(weight_matrix)
 
@@ -408,7 +410,7 @@ class Mapper:
         self.__publishMarkers()
 
     def taskPrioritization(self):
-        # self.__updateWeightMatrixInverse()
+        self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobians, jacobians = self.__getPseudoInverseForTaskPrioritization()
         q_vel = np.zeros(self.DOF_count)
         multiplier = np.identity(self.DOF_count)
@@ -416,6 +418,7 @@ class Mapper:
             error = self.__getError(index)
             q_vel = q_vel + np.dot(np.dot(multiplier, pseudo_inverse_jacobians[index]), (self.human_hand_vel[index*3:index*3+3] + np.dot(self.K_matrix, error)))
             multiplier = np.dot(multiplier, np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index], jacobians[index]))
+        self.joint_velocity = q_vel
         self.__setJointsTargetVelocity(q_vel)
 
     def __executeInverseOnce(self):
