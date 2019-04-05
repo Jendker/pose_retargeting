@@ -188,11 +188,24 @@ class Hand:
     def __init__(self, clientID):
         self.clientID = clientID
 
-        self.hand_parts_list = []
         index_finger = HandPart(self.clientID, ['IMCP_side_joint', 'IMCP_front_joint', 'IPIP_joint', 'IDIP_joint'], 'ITIP_tip',
                                 [['ITIP_tip', 'IPIP_joint'], ['IMCP_side_joint', 'IMCP_side_joint'], [11, 9]],
                                 [[10., -10.], [100., 0.], [90., 0.], [90., 0.]])
-        self.hand_parts_list.append(index_finger)
+        middle_finger = HandPart(self.clientID, ['MMCP_side_joint', 'MMCP_front_joint', 'MPIP_joint', 'MDIP_joint'], 'MTIP_tip',
+                                [['MTIP_tip', 'MPIP_joint'], ['MMCP_side_joint', 'MMCP_side_joint'], [14, 12]],
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]])
+        ring_finger = HandPart(self.clientID, ['RMCP_side_joint', 'RMCP_front_joint', 'RPIP_joint', 'RDIP_joint'], 'RTIP_tip',
+                                [['RTIP_tip', 'RPIP_joint'], ['RMCP_side_joint', 'RMCP_side_joint'], [17, 15]],
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]])
+        pinkie_finger = HandPart(self.clientID, ['PMCP_side_joint', 'PMCP_front_joint', 'PPIP_joint', 'PDIP_joint'], 'PTIP_tip',
+                                [['PTIP_tip', 'PPIP_joint'], ['PMCP_side_joint', 'PMCP_side_joint'], [20, 18]],
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]])
+
+        self.hand_parts_list = (index_finger, middle_finger, ring_finger, pinkie_finger)
+
+    def __del__(self):
+        for hand_part in self.hand_parts_list:
+            del hand_part  # not deleted properly, so executing explicitly
 
     def controlOnce(self):
         for hand_part in self.hand_parts_list:

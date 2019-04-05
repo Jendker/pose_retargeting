@@ -38,6 +38,7 @@ class Mapper:
         self.sampling_time = 0.001
 
     def __del__(self):
+        del self.hand  # not deleted properly, so executing explicitly
         # Close the connection to V-REP:
         vrep.simxFinish(self.clientID)
 
