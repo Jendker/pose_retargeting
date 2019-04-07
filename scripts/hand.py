@@ -191,21 +191,20 @@ class Hand:
         index_finger = HandPart(self.clientID, ['IMCP_side_joint', 'IMCP_front_joint', 'IPIP_joint', 'IDIP_joint'], 'ITIP_tip',
                                 [['ITIP_tip', 'IPIP_joint'], ['IMCP_side_joint', 'IMCP_side_joint'], [11, 9]],
                                 [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
-        # middle_finger = HandPart(self.clientID, ['MMCP_side_joint', 'MMCP_front_joint', 'MPIP_joint', 'MDIP_joint'], 'MTIP_tip',
-        #                         [['MTIP_tip', 'MPIP_joint'], ['MMCP_side_joint', 'MMCP_side_joint'], [14, 12]],
-        #                         [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
-        # ring_finger = HandPart(self.clientID, ['RMCP_side_joint', 'RMCP_front_joint', 'RPIP_joint', 'RDIP_joint'], 'RTIP_tip',
-        #                         [['RTIP_tip', 'RPIP_joint'], ['RMCP_side_joint', 'RMCP_side_joint'], [17, 15]],
-        #                         [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
-        # pinkie_finger = HandPart(self.clientID, ['PMCP_side_joint', 'PMCP_front_joint', 'PPIP_joint', 'PDIP_joint'], 'PTIP_tip',
-        #                         [['PTIP_tip', 'PPIP_joint'], ['PMCP_side_joint', 'PMCP_side_joint'], [20, 18]],
-        #                         [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
-        # thumb_finger = HandPart(self.clientID, ['TMCP_rotation_joint', 'TMCP_front_joint', 'TPIP_side_joint', 'TPIP_front_joint', 'TDIP_joint'], 'TTIP_tip',
-        #                         [['TTIP_tip', 'TPIP_front_joint'], ['TMCP_rotation_joint', 'TMCP_rotation_joint'], [8, 6]],
-        #                         [[60., -60.], [70., 0.], [30., -30.], [12., -12.], [90, 0]], ConfigurationType.thumb)
+        middle_finger = HandPart(self.clientID, ['MMCP_side_joint', 'MMCP_front_joint', 'MPIP_joint', 'MDIP_joint'], 'MTIP_tip',
+                                [['MTIP_tip', 'MPIP_joint'], ['MMCP_side_joint', 'MMCP_side_joint'], [14, 12]],
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
+        ring_finger = HandPart(self.clientID, ['RMCP_side_joint', 'RMCP_front_joint', 'RPIP_joint', 'RDIP_joint'], 'RTIP_tip',
+                                [['RTIP_tip', 'RPIP_joint'], ['RMCP_side_joint', 'RMCP_side_joint'], [17, 15]],
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
+        pinkie_finger = HandPart(self.clientID, ['PMCP_side_joint', 'PMCP_front_joint', 'PPIP_joint', 'PDIP_joint'], 'PTIP_tip',
+                                [['PTIP_tip', 'PPIP_joint'], ['PMCP_side_joint', 'PMCP_side_joint'], [20, 18]],
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger)
+        thumb_finger = HandPart(self.clientID, ['TMCP_rotation_joint', 'TMCP_front_joint', 'TPIP_side_joint', 'TPIP_front_joint', 'TDIP_joint'], 'TTIP_tip',
+                                [['TTIP_tip', 'TPIP_front_joint'], ['TMCP_rotation_joint', 'TMCP_rotation_joint'], [8, 6]],
+                                [[60., -60.], [70., 0.], [30., -30.], [12., -12.], [90, 0]], ConfigurationType.thumb)
 
-        self.hand_parts_list = [index_finger]
-        # self.hand_parts_list = [thumb_finger]
+        self.hand_parts_list = (index_finger, middle_finger, ring_finger, pinkie_finger, thumb_finger)
 
     def __del__(self):
         for hand_part in self.hand_parts_list:
