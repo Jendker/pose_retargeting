@@ -10,6 +10,7 @@ from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
 import tf_conversions
 from hand import Hand
+from FPS_counter import FPSCounter
 
 
 class Mapper:
@@ -36,6 +37,8 @@ class Mapper:
         self.errors_in_connection = 0
         self.hand = Hand(self.clientID)
         self.sampling_time = 0.001
+
+        self.FPSCounter = FPSCounter()
 
     def __del__(self):
         del self.hand  # not deleted properly, so executing explicitly
@@ -239,8 +242,7 @@ class Mapper:
     def execute(self):
         start_time = time.time()
         while not rospy.is_shutdown():
-            time_now = time.time()
             self.__executeInverseOnce()
-            print (time.time() - time_now)
+            self.FPSCounter.printFPS()
             time.sleep(self.sampling_time - ((time.time() - start_time) % self.sampling_time))
             self.last_update = time.time()

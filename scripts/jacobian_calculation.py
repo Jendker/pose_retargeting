@@ -210,7 +210,7 @@ class JacobianCalculation:
             _, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_buffer)
             joint_positions.append(joint_position)
 
-        self.printTransformation(joint_positions=joint_positions)
+        # self.printTransformation(joint_positions=joint_positions)
         result = self.jacobian(*joint_positions)
         return result
 
