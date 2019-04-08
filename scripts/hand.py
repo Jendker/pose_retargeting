@@ -140,7 +140,7 @@ class HandPart:
             return self.last_human_hand_part_pose[index * 3:index * 3 + 3] - current_pose
 
     def taskPrioritization(self):
-        # self.__updateWeightMatrixInverse()
+        self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobians, jacobians = self.__getPseudoInverseForTaskPrioritization()
         q_vel = np.zeros(self.DOF_count)
         multiplier = np.identity(self.DOF_count)

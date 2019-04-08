@@ -11,6 +11,7 @@ import geometry_msgs.msg
 import tf_conversions
 from hand import Hand
 from FPS_counter import FPSCounter
+from scaler import Scaler
 
 
 class Mapper:
@@ -39,6 +40,7 @@ class Mapper:
         self.sampling_time = 0.001
 
         self.FPSCounter = FPSCounter()
+        self.scaler = Scaler()
 
     def __del__(self):
         del self.hand  # not deleted properly, so executing explicitly
@@ -231,7 +233,8 @@ class Mapper:
             data = self.__mirrorData(data)
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
-        self.last_data = self.__scaleHandData(data)  # ready to save after scaling
+        data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
+        self.last_data = data
 
         self.hand.newPositionFromHPE(self.last_data)
         self.__publishMarkers()
