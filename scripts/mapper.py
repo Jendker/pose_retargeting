@@ -5,7 +5,9 @@ import numpy as np
 import time
 import rospy
 import tf2_ros
+import tf
 from geometry_msgs.msg import Point
+from sensor_msgs.msg import PointCloud
 from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
 import tf_conversions
@@ -30,14 +32,19 @@ class Mapper:
         self.last_callback_time = 0  # 0 means no callback yet
         self.last_data = []
         self.node_frame_name = "hand_vrep"
+        self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand')
 
         self.simulationFingerLength = 0.096
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
+        self.points_pub = rospy.Publisher('pose_mapping_vrep/in_base', PointCloud, queue_size=10)
+        self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
         self.hand = Hand(self.clientID)
         self.sampling_time = 0.001
+
+        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot', vrep.simx_opmode_blocking)
 
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler()
@@ -51,9 +58,6 @@ class Mapper:
         return np.array([[0, -vector[2], vector[1]],
                          [vector[2], 0, -vector[0]],
                          [-vector[1], vector[0], 0]])
-
-    def __transformationVector(self, from_point, to_point):
-        return to_point - from_point
 
     def __getRotationMatrixFromVectors(self, desired_vector, given_vector):
         desired_vector = desired_vector / np.linalg.norm(desired_vector)
@@ -84,49 +88,20 @@ class Mapper:
         data_return.header.stamp = rospy.Time.now()
         return data_return
 
-    def __transformPointWithTransform(self, point, transformation_matrix):
-        rotation_matrix = transformation_matrix[0:3, 0:3]
-        translation_vector = transformation_matrix[0:3, 3]
-        inverse_transformation_matrix = self.__euclideanTransformation(rotation_matrix.T,
-                                                                       np.dot(-rotation_matrix.T, translation_vector))
-        vector_transformed = np.dot(inverse_transformation_matrix,
-                                    np.append(point, [1]))[0:3]
-        return vector_transformed
-
-    def __getFingerLength(self, data, indices):
-        if len(indices) != 4:
-            rospy.logerr("Error. Fingers point count does not match 4!")
-            return 0.0
-        length = 0.0
-        for i, index in enumerate(indices):
-            if i == 0:
-                continue
-            length += np.linalg.norm(data.joints_position[index] - data.joints_position[indices[i - 1]])
-        return length
-
-    def __scaleHandData(self, data):
-        fingers_lenths = []
-        fingers_lenths.append(self.__getFingerLength(data, [2, 9, 10, 11]))
-        fingers_lenths.append(self.__getFingerLength(data, [4, 15, 16, 17]))
-        mean_length = sum(fingers_lenths) / float(len(fingers_lenths))
-        scaling_ratio = self.simulationFingerLength / mean_length
-        center_point = data.joints_position[2]  # index knuckle as transformation center
-        new_data = data
-        for i, point in enumerate(data.joints_position):
-            new_data.joints_position[i] = (point - center_point) * scaling_ratio + center_point
-        return new_data
+    def __returnTransformation(self, data, inverse_transformation_matrix):
+        points_return = []
+        for point in data.joints_position:
+            vector_transformed = np.dot(inverse_transformation_matrix, np.append(point, [1]))[0:3]
+            points_return.append(vector_transformed)
+        data_return = data
+        data_return.joints_position = points_return
+        data_return.header.frame_id = self.camera_frame_name
+        return data_return
 
     def __getPositionVectorForDataIndex(self, data, index):
         joint = data.joints_position[index]
         position = [joint.x, joint.y, joint.z]
         return np.array(position)
-
-    def __dataToPointsList(self, data):
-        pointList = []
-        for point in data.joints_position:
-            this_point = [point.x, point.y, point.z]
-            pointList.append(np.array(this_point))
-        return pointList
 
     def __publishMarkers(self):
         message = MarkerArray()
@@ -228,12 +203,55 @@ class Mapper:
 
         return data
 
+    def publishNewPointCloud(self, data):
+        point_cloud = PointCloud()
+        point_cloud.header.frame_id = self.camera_frame_name
+        point_cloud.header.stamp = data.header.stamp
+        for point in data.joints_position:
+            pc_point = Point()
+            pc_point.x = point[0]
+            pc_point.y = point[1]
+            pc_point.z = point[2]
+            point_cloud.points.append(pc_point)
+        self.points_pub.publish(point_cloud)
+
+    def __setHandPosition(self, transformation_matrix):
+        inverse_rotation_matrix = np.linalg.inv(transformation_matrix[0:3, 0:3])
+        translation = transformation_matrix[0:3, 3]
+        inverse_translation = -np.dot(inverse_rotation_matrix, translation)
+        inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
+        q = tf_conversions.transformations.quaternion_from_matrix(inverse_transformation_matrix)
+        vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, inverse_translation, vrep.simx_opmode_oneshot)
+        vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_handle, -1, q, vrep.simx_opmode_oneshot)
+        return inverse_transformation_matrix
+
+    def __transformToCameraLink(self, data):
+        target_frame = self.camera_frame_name
+        from_frame = data.header.frame_id
+        self.tf_listener_.waitForTransform(from_frame, target_frame, rospy.Time(0), rospy.Duration(4))
+
+        point_cloud = PointCloud()
+        point_cloud.header.frame_id = from_frame
+        for point in data.joints_position:
+            point_cloud.points.append(point)
+
+        point_cloud_in_target = self.tf_listener_.transformPointCloud(target_frame, point_cloud)
+        return_points = data
+        for index, point in enumerate(point_cloud_in_target.points):
+            return_points.joints_position[index] = point
+        return_points.header.frame_id = target_frame
+        return return_points
+
     def callback(self, data):
         if self.using_left_hand:
             data = self.__mirrorData(data)
+        data = self.__transformToCameraLink(data)  # comment to keep hand in 0 position
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
+        inverse_transformation_matrix = self.__setHandPosition(transformation_matrix)  # comment to keep hand in 0 position
+        data = self.__returnTransformation(data, inverse_transformation_matrix)  # comment to keep hand in 0 position
+        self.publishNewPointCloud(data)  # comment to keep hand in 0 position
         self.last_data = data
 
         self.hand.newPositionFromHPE(self.last_data)
