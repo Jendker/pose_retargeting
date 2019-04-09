@@ -35,6 +35,7 @@ class Mapper:
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand')
+        self.shift_translation = np.array([0., 0., 0.4])
 
         self.simulationFingerLength = 0.096
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
@@ -91,7 +92,8 @@ class Mapper:
     def __returnTransformation(self, data, inverse_transformation_matrix):
         points_return = []
         for point in data.joints_position:
-            vector_transformed = np.dot(inverse_transformation_matrix, np.append(point, [1]))[0:3]
+            vector_transformed = np.dot(inverse_transformation_matrix, np.append(point, [1]))[0:3]\
+                                 + self.shift_translation  # shift to keep hand above surface
             points_return.append(vector_transformed)
         data_return = data
         data_return.joints_position = points_return
@@ -221,7 +223,8 @@ class Mapper:
         inverse_translation = -np.dot(inverse_rotation_matrix, translation)
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
         q = tf_conversions.transformations.quaternion_from_matrix(inverse_transformation_matrix)
-        vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, inverse_translation, vrep.simx_opmode_oneshot)
+        whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
+        vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
         vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_handle, -1, q, vrep.simx_opmode_oneshot)
         return inverse_transformation_matrix
 
