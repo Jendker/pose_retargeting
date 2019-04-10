@@ -35,7 +35,9 @@ class Mapper:
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand')
-        self.shift_translation = np.array([0., 0., 0.4])
+        self.shift_translation = np.array([-1.5, 0., 1.0])
+
+        self.count_print = 0
 
         self.simulationFingerLength = 0.096
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
@@ -45,7 +47,7 @@ class Mapper:
         self.hand = Hand(self.clientID)
         self.sampling_time = 0.001
 
-        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot', vrep.simx_opmode_blocking)
+        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
 
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler()
@@ -222,10 +224,23 @@ class Mapper:
         translation = transformation_matrix[0:3, 3]
         inverse_translation = -np.dot(inverse_rotation_matrix, translation)
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
+        if self.count_print > 10:
+            copy_inverse_transformation_matrix = inverse_transformation_matrix.copy()
+            scale, shear, angles, trans, persp = tf_conversions.transformations.decompose_matrix(copy_inverse_transformation_matrix)
+            print(scale, "scale")
+            print(np.array(angles) * 180.0 / np.pi)
+            euler = tf_conversions.transformations.euler_from_matrix(copy_inverse_transformation_matrix, 'sxyz')
+            rospy.loginfo("%f %f %f sxyz", euler[0] * 180.0 / np.pi, euler[1] * 180.0 / np.pi, euler[2] * 180.0 / np.pi)
+            euler = tf_conversions.transformations.euler_from_matrix(copy_inverse_transformation_matrix, 'rxyz')
+            rospy.loginfo("%f %f %f rxyz", euler[0] * 180.0 / np.pi, euler[1] * 180.0 / np.pi, euler[2] * 180.0 / np.pi)
+            self.count_print = 0
+        self.count_print += 1
         q = tf_conversions.transformations.quaternion_from_matrix(inverse_transformation_matrix)
         whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
         vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
         vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_handle, -1, q, vrep.simx_opmode_oneshot)
+        # _, dummy_handle = vrep.simxCreateDummy(self.clientID, 0.005, [255, 255, 255, 255], vrep.simx_opmode_blocking)
+        # vrep.simxSetObjectPosition(self.clientID, dummy_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
         return inverse_transformation_matrix
 
     def __transformToCameraLink(self, data):
