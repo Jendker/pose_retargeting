@@ -173,7 +173,8 @@ class HandPart:
         for index in self.task_descriptor_equivalent_hpe_indices:
             hand_part_poses.append(new_data.joints_position[index])
         HPE_hand_part_poses = np.concatenate(hand_part_poses)
-        temp_new_HPE_hand_pose = HPE_hand_part_poses * 0.2 + self.last_human_hand_part_pose * 0.8
+        alpha = 0.1
+        temp_new_HPE_hand_pose = HPE_hand_part_poses * alpha + self.last_human_hand_part_pose * (1 - alpha)
         if self.last_callback_time != 0:  # TODO: maybe here we can make better with calculating with first iteration
             self.human_hand_vel = (temp_new_HPE_hand_pose - self.last_human_hand_part_pose) / (
                     current_time - self.last_callback_time)
