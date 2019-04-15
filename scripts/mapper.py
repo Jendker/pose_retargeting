@@ -35,17 +35,21 @@ class Mapper:
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand')
-        self.shift_translation = np.array([-0.5, 0., 1.3])
+        self.shift_translation = np.array([-1.5, 0., 0.4])
 
-        self.simulationFingerLength = 0.096
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
         self.points_pub = rospy.Publisher('pose_mapping_vrep/in_base', PointCloud, queue_size=10)
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
-        self.hand = Hand(self.clientID)
+        self.alpha = 0.2
+        self.hand = Hand(self.clientID, self.alpha)
         self.sampling_time = 0.001
 
         _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
+        _, self.last_quaternion = vrep.simxGetObjectQuaternion(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
+        self.last_quaternion = np.array(self.last_quaternion)
+        _, self.last_position = vrep.simxGetObjectPosition(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
+        self.last_position = np.array(self.last_position)
 
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler()
@@ -174,13 +178,13 @@ class Mapper:
         t.header.frame_id = data.header.frame_id
         t.child_frame_id = self.node_frame_name
 
-        finger_indices = [2, 3, 4, 5, 0, 1]  # palm base, index, middle, ring, little, thumb - 6
+        finger_indices = [2, 3, 4, 5, 0]  # palm base, index, middle, ring, little, thumb - 6  # 1
         world_points = []
         for index in finger_indices:
             world_points.append(self.__getPositionVectorForDataIndex(data, index))
 
         vrep_points = [np.array([0.033, -.0099, 0.352]), np.array([0.011, -0.0099, .356]), np.array([-.011, -.0099, .352]),
-                       np.array([-0.033, -.0099, .3436]), np.array([-0.011, -0.005, 0.281]), np.array([0.03, -0.005, 0.285])]
+                       np.array([-0.033, -.0099, .3436]), np.array([-0.011, -0.005, 0.281])]  # , np.array([0.03, -0.005, 0.285])
 
         # print(-math.sqrt(0.071 ** 2 - (0) ** 2 - ((0.0099 - 0.005) ** 2)) + .352)
         # print(np.linalg.norm(np.array([-.011, -.0099, .352]) - np.array([-0.011, -0.005, 0.281])))
@@ -227,9 +231,12 @@ class Mapper:
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
         q = tf_conversions.transformations.quaternion_from_matrix(inverse_transformation_matrix)
         whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
-        vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
-        q = (np.array(q) / np.linalg.norm(q)).tolist()
-        vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_handle, -1, q, vrep.simx_opmode_oneshot)
+        self.last_position = whole_translation * self.alpha + self.last_position * (1. - self.alpha)
+        vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, self.last_position.tolist(), vrep.simx_opmode_oneshot)
+        q = np.array(q) / np.linalg.norm(q)
+        self.last_quaternion = q * self.alpha + self.last_quaternion * (1 - self.alpha)
+        self.last_quaternion = self.last_quaternion / np.linalg.norm(self.last_quaternion)
+        vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_handle, -1, self.last_quaternion.tolist(), vrep.simx_opmode_oneshot)
         # _, dummy_handle = vrep.simxCreateDummy(self.clientID, 0.005, [255, 255, 255, 255], vrep.simx_opmode_blocking)
         # vrep.simxSetObjectPosition(self.clientID, dummy_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
         return inverse_transformation_matrix
