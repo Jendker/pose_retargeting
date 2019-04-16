@@ -22,6 +22,7 @@ class HandPart:
             _, handle = vrep.simxGetObjectHandle(self.clientID, joint_handle_name, vrep.simx_opmode_blocking)
             self.list_joints_handles.append(handle)
 
+        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_tip', vrep.simx_opmode_blocking)
         handle_name_dict = dict(zip(list_joint_handles_names, self.list_joints_handles))
         handle_name_dict[tip_handle_name] = self.tip_handle
         self.task_descriptor_handles = [handle_name_dict[joint_handle_name] for joint_handle_name in task_descriptor_base_handles_and_indices[0]]
@@ -45,7 +46,7 @@ class HandPart:
         for joint_handle in self.list_joints_handles:  # initialize streaming
             _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
         for handle in self.task_descriptor_handles:
-            _, _ = vrep.simxGetObjectPosition(self.clientID, handle, -1, vrep.simx_opmode_streaming)
+            _, _ = vrep.simxGetObjectPosition(self.clientID, handle, self.hand_base_handle, vrep.simx_opmode_streaming)
 
         self.joint_velocity = np.zeros(self.DOF_count)
         self.joints_limits = []
@@ -68,7 +69,7 @@ class HandPart:
     def __simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
         current_pos = []
         for handle in handles:
-            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, -1, mode)
+            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, self.hand_base_handle, mode)
             current_pos.extend(this_current_pos)
         return np.array(current_pos)
 
@@ -108,7 +109,7 @@ class HandPart:
             start_index = index * 3
             end_index = start_index + 3
             dummy_position_list = last_pose[start_index:end_index].tolist()
-            vrep.simxSetObjectPosition(self.clientID, dummy_handle, -1, dummy_position_list,
+            vrep.simxSetObjectPosition(self.clientID, dummy_handle, self.hand_base_handle, dummy_position_list,
                                        vrep.simx_opmode_oneshot)
 
     def __setJointsTargetVelocity(self, joints_velocities):

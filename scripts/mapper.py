@@ -271,7 +271,7 @@ class Mapper:
         # self.publishNewPointCloud(data)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
         inverse_transformation_matrix = self.__setHandPosition(transformation_matrix)  # comment to keep hand in 0 position
-        data = self.__returnTransformation(data, inverse_transformation_matrix)  # comment to keep hand in 0 position
+        # data = self.__returnTransformation(data, inverse_transformation_matrix)  # comment to keep hand in 0 position
         self.last_data = data
 
         self.hand.newPositionFromHPE(self.last_data)
