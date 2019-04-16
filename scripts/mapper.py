@@ -35,7 +35,7 @@ class Mapper:
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand')
-        self.shift_translation = np.array([-1.5, 0., 0.4])
+        self.shift_translation = np.array([-1.5, 0., 0.25])
 
         self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
         self.points_pub = rospy.Publisher('pose_mapping_vrep/in_base', PointCloud, queue_size=10)
@@ -43,7 +43,7 @@ class Mapper:
         self.errors_in_connection = 0
         self.alpha = 0.2
         self.hand = Hand(self.clientID, self.alpha)
-        self.sampling_time = 0.001
+        self.sampling_time = 0.05
 
         _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
         _, self.last_quaternion = vrep.simxGetObjectQuaternion(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
