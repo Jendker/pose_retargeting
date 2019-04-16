@@ -45,7 +45,7 @@ class Mapper:
         self.hand = Hand(self.clientID, self.alpha)
         self.sampling_time = 0.05
 
-        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
+        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_tip', vrep.simx_opmode_blocking)
         _, self.last_quaternion = vrep.simxGetObjectQuaternion(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
         self.last_quaternion = np.array(self.last_quaternion)
         _, self.last_position = vrep.simxGetObjectPosition(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
