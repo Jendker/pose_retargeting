@@ -6,6 +6,7 @@ import time
 import rospy
 import pickle
 import os
+import rospkg
 
 
 class ConfigurationType(Enum):
@@ -32,11 +33,13 @@ class JacobianCalculation:
         self.clientID = clientID
 
     def calculateJacobian(self, configuration_type):
-        if not os.path.isdir("jacobians"):
-            os.mkdir("jacobians")
+        rospack = rospkg.RosPack()
+        jacobians_folder_path = rospack.get_path('pose_mapping_vrep') + "/scripts/jacobians/"
+        if not os.path.isdir(jacobians_folder_path):
+            os.mkdir(jacobians_folder_path)
         jacobian_configuration = self.task_object_handles_and_bases
         conf_string = np.array_str(np.array(jacobian_configuration)).replace("\n", "")
-        jacobians_filename = "jacobians/" + conf_string + ".dat"
+        jacobians_filename = jacobians_folder_path + conf_string + ".dat"
 
         already_calculated = False
         if os.path.isfile(jacobians_filename):
