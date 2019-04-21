@@ -39,7 +39,7 @@ class JacobianCalculation:
             os.mkdir(jacobians_folder_path)
         jacobian_configuration = self.task_object_handles_and_bases
         conf_string = np.array_str(np.array(jacobian_configuration)).replace("\n", "")
-        jacobians_filename = jacobians_folder_path + conf_string + ".dat"
+        jacobians_filename = jacobians_folder_path + conf_string + configuration_type.name + ".dat"
 
         already_calculated = False
         if os.path.isfile(jacobians_filename):
@@ -50,32 +50,33 @@ class JacobianCalculation:
                 already_calculated = True
 
         if not already_calculated:
+            _, hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
             objects_positions = {}
             for joint_handle in self.all_handles:
-                _, this_object_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, -1,
+                _, this_object_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, hand_base_handle,
                                                                      vrep.simx_opmode_blocking)
                 objects_positions[joint_handle] = np.array(this_object_position)
 
             jacobian = sp.zeros(len(self.joint_handles), 3 * len(self.task_object_handles_and_bases))
             Ts = []
-            if configuration_type == ConfigurationType.finger:
-                for task_index, [target_handle, base_handle] in enumerate(self.task_object_handles_and_bases):
-                    transformations = []
-                    transformation_handles = []
-                    for handle in self.all_handles:
-                        if not transformation_handles:  # if empty
-                            if handle == base_handle:
-                                transformation_handles.append(handle)
-                        else:
+            for task_index, [target_handle, base_handle] in enumerate(self.task_object_handles_and_bases):
+                transformations = []
+                transformation_handles = []
+                for handle in self.all_handles:
+                    if not transformation_handles:  # if empty
+                        if handle == base_handle:
                             transformation_handles.append(handle)
-                            if handle == target_handle:
-                                break
+                    else:
+                        transformation_handles.append(handle)
+                        if handle == target_handle:
+                            break
 
-                    if not transformation_handles:
-                        str = "No base handle found for transformation %d. Skipping." % task_index
-                        rospy.logwarn(str)
-                        continue
+                if not transformation_handles:
+                    str = "No base handle found for transformation %d. Skipping." % task_index
+                    rospy.logwarn(str)
+                    continue
 
+                if configuration_type == ConfigurationType.finger:
                     for index, joint_handle in enumerate(transformation_handles):
                         if joint_handle == target_handle:
                             last_translation = np.linalg.norm(objects_positions[transformation_handles[index]] -
@@ -108,36 +109,7 @@ class JacobianCalculation:
                                                           [0, sp.sin(angle), sp.cos(angle), length],
                                                           [0, 0, 0, 1]]))
 
-                    T = sp.eye(4)
-                    for index, transformation in enumerate(transformations):
-                        T = T * transformation
-                    T = sp.simplify(T)
-                    Ts.append(T)
-                    this_jacobian = T[0:3, 3].T.jacobian(sp.Matrix(self.q)).T
-                    jacobian[:, task_index * 3: task_index * 3 + 3] = this_jacobian
-                jacobian = sp.simplify(jacobian)
-                calculated_configuration = (Ts, jacobian)
-                with open(jacobians_filename, 'wb') as handle:
-                    pickle.dump(calculated_configuration, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-            elif configuration_type == ConfigurationType.thumb:
-                for task_index, [target_handle, base_handle] in enumerate(self.task_object_handles_and_bases):
-                    transformations = []
-                    transformation_handles = []
-                    for handle in self.all_handles:
-                        if not transformation_handles:  # if empty
-                            if handle == base_handle:
-                                transformation_handles.append(handle)
-                        else:
-                            transformation_handles.append(handle)
-                            if handle == target_handle:
-                                break
-
-                    if not transformation_handles:
-                        str = "No base handle found for transformation %d. Skipping." % task_index
-                        rospy.logwarn(str)
-                        continue
-
+                elif configuration_type == ConfigurationType.thumb:
                     for index, joint_handle in enumerate(transformation_handles):
                         vector_this_object_position = objects_positions[joint_handle]
 
@@ -188,21 +160,23 @@ class JacobianCalculation:
                         rospy.logerr("Transformation index not defined")
                         exit(1)
 
-                    T = sp.eye(4)
-                    for index, transformation in enumerate(transformations):
-                        T = T * transformation
-                    T = sp.simplify(T)
-                    Ts.append(T)
-                    this_jacobian = T[0:3, 3].T.jacobian(sp.Matrix(self.q)).T
-                    jacobian[:, task_index * 3: task_index * 3 + 3] = this_jacobian
-                jacobian = sp.simplify(jacobian)
-                calculated_configuration = (Ts, jacobian)
-                with open(jacobians_filename, 'wb') as handle:
-                    pickle.dump(calculated_configuration, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                else:
+                    print("Configuration not defined")
+                    exit(1)
 
-            else:
-                print("Configuration not defined")
-                exit(1)
+                T = sp.eye(4)
+                for index, transformation in enumerate(transformations):
+                    T = T * transformation
+                T = sp.simplify(T)
+                Ts.append(T)
+                this_jacobian = T[0:3, 3].T.jacobian(sp.Matrix(self.q)).T
+                jacobian[:, task_index * 3: task_index * 3 + 3] = this_jacobian
+
+            jacobian = sp.simplify(jacobian)
+            calculated_configuration = (Ts, jacobian)
+            with open(jacobians_filename, 'wb') as handle:
+                pickle.dump(calculated_configuration, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         lamb_jacobian = sp.lambdify(self.q, jacobian)
         lamb_Ts = [sp.lambdify(self.q, T) for T in Ts]
         return lamb_jacobian, lamb_Ts
