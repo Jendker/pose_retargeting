@@ -12,6 +12,7 @@ import rospkg
 class ConfigurationType(Enum):
     finger = 1
     thumb = 2
+    pinkie = 3
 
 
 class JacobianCalculation:
@@ -50,7 +51,7 @@ class JacobianCalculation:
                 already_calculated = True
 
         if not already_calculated:
-            _, hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
+            _, hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_tip', vrep.simx_opmode_blocking)
             objects_positions = {}
             for joint_handle in self.all_handles:
                 _, this_object_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, hand_base_handle,
@@ -159,6 +160,56 @@ class JacobianCalculation:
                             continue
                         rospy.logerr("Transformation index not defined")
                         exit(1)
+
+                elif configuration_type == ConfigurationType.pinkie:
+                    for index, joint_handle in enumerate(transformation_handles):
+                        if joint_handle == target_handle:
+                            last_translation = np.linalg.norm(objects_positions[transformation_handles[index]] -
+                                                              objects_positions[transformation_handles[index - 1]])
+                            transformations.append(sp.Matrix([[1, 0, 0, 0],
+                                                              [0, 1, 0, 0],
+                                                              [0, 0, 1, last_translation],
+                                                              [0, 0, 0, 1]]))
+                            continue
+
+                        angle = self.joint_handle_q_map[joint_handle]
+                        if index == 0:
+                            vector_this_object_position = objects_positions[joint_handle]
+                            angle_55_deg = 55. / 180. * sp.pi
+                            transformations.append(sp.Matrix([[1, 0, 0, vector_this_object_position[0]],
+                                                              [0, 1, 0, vector_this_object_position[1]],
+                                                              [0, 0, 1, vector_this_object_position[2]],
+                                                              [0, 0, 0, 1]]))
+                            transformations.append(sp.Matrix([[sp.cos(-angle_55_deg), 0, sp.sin(-angle_55_deg), 0],
+                                                              [0, 1, 0, 0],
+                                                              [-sp.sin(-angle_55_deg), 0, sp.cos(-angle_55_deg), 0],
+                                                              [0, 0, 0, 1]]))
+                            transformations.append(sp.Matrix([[1, 0, 0, 0],
+                                                              [0, sp.cos(angle), -sp.sin(angle), 0],
+                                                              [0, sp.sin(angle), sp.cos(angle), 0],
+                                                              [0, 0, 0, 1]]))
+                            transformations.append(sp.Matrix([[sp.cos(angle_55_deg), 0, sp.sin(angle_55_deg), 0],
+                                                              [0, 1, 0, 0],
+                                                              [-sp.sin(angle_55_deg), 0, sp.cos(angle_55_deg), 0],
+                                                              [0, 0, 0, 1]]))
+                            vector_previous_object_position = vector_this_object_position.copy()
+                            continue
+                        length = np.linalg.norm(objects_positions[transformation_handles[index]] - objects_positions[
+                            transformation_handles[index - 1]])
+                        if index == 1:
+                            vector_this_object_position = objects_positions[joint_handle]
+                            vector_shift = vector_this_object_position - vector_previous_object_position
+                            transformations.append(sp.Matrix([[sp.cos(angle), 0, sp.sin(angle), vector_shift[0]],
+                                                              [0, 1, 0, vector_shift[1]],
+                                                              [-sp.sin(angle), 0, sp.cos(angle), vector_shift[2]],
+                                                              [0, 0, 0, 1]]))
+                            continue
+                        # if length < 0.001:
+                        #     length = 0.
+                        transformations.append(sp.Matrix([[1, 0, 0, 0],
+                                                          [0, sp.cos(angle), -sp.sin(angle), 0],
+                                                          [0, sp.sin(angle), sp.cos(angle), length],
+                                                          [0, 0, 0, 1]]))
 
                 else:
                     print("Configuration not defined")
