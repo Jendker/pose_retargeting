@@ -178,16 +178,13 @@ class Mapper:
         t.header.frame_id = data.header.frame_id
         t.child_frame_id = self.node_frame_name
 
-        finger_indices = [2, 3, 4, 5, 0]  # palm base, index, middle, ring, little, thumb - 6  # 1
+        finger_indices = [2, 3, 4, 0]  # index, middle, ring, thumb
         world_points = []
         for index in finger_indices:
             world_points.append(self.__getPositionVectorForDataIndex(data, index))
 
         vrep_points = [np.array([0.033, -.0099, 0.352]), np.array([0.011, -0.0099, .356]), np.array([-.011, -.0099, .352]),
-                       np.array([-0.033, -.0099, .3436]), np.array([-0.011, -0.005, 0.281])]  # , np.array([0.03, -0.005, 0.285])
-
-        # print(-math.sqrt(0.071 ** 2 - (0) ** 2 - ((0.0099 - 0.005) ** 2)) + .352)
-        # print(np.linalg.norm(np.array([-.011, -.0099, .352]) - np.array([-0.011, -0.005, 0.281])))
+                       np.array([-0.011, -0.005, 0.281])]
 
         transformation_matrix, correct_rotation_matrix = self.__correspondancePointsTransformation(np.array(world_points), np.array(vrep_points))
 
