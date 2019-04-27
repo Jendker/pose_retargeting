@@ -34,7 +34,8 @@ class ErrorCalculation:
             if self.last_hpe_update + 4. < time.time():
                 self.stop()
 
-    def start(self):
+    def newPositionFromHPE(self):
+        self.last_hpe_update = time.time()
         if not self.running:
             self.running = True
             self.start_time = time.time()
@@ -46,13 +47,15 @@ class ErrorCalculation:
         rospy.loginfo("Finished calculation of errors for task descriptors.")
 
     def saveResults(self):
-        folder_path = 'error_results'
+        folder_path = '/media/psf/Dropbox/Forschungspraxis/error_results'  # laptop
+        if not os.path.isdir('/media/psf/Dropbox/Forschungspraxis'):
+            folder_path = '~/Dropbox/Forschungspraxis/error_results'  # university computer
         if not os.path.isdir(folder_path):
             os.mkdir(folder_path)
         file_name = ''
         for hand_part in self.hand_parts:
-            file_name += hand_part.getName() + hand_part.taskDescriptorsCount()
+            file_name += hand_part.getName() + str(hand_part.taskDescriptorsCount())
         dict_to_save = self.per_finger_errors
         dict_to_save['whole_error'] = self.errors
-        scipy.io.savemat(file_name+'.mat', mdict=dict_to_save)
+        scipy.io.savemat(folder_path + '/' + file_name + '.mat', mdict=dict_to_save)
 

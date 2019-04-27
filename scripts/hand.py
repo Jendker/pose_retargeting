@@ -144,8 +144,8 @@ class HandPart:
 
     def getAllTaskDescriptorsErrors(self):
         error = 0.
-        for index, _ in self.task_descriptor_handles:
-            error = error + self.__getError(index)
+        for index, _ in enumerate(self.task_descriptor_handles):
+            error = error + np.linalg.norm(self.__getError(index))
         return error
 
     def taskPrioritization(self):
@@ -236,4 +236,4 @@ class Hand:
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:
             hand_part.newPositionFromHPE(new_data, self.alpha)
-        self.error_calculation.start()
+        self.error_calculation.newPositionFromHPE()
