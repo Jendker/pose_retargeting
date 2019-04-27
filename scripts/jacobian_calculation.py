@@ -16,7 +16,7 @@ class ConfigurationType(Enum):
 
 
 class JacobianCalculation:
-    def __init__(self, clientID, transformation_handles, task_objects_handles_and_bases, configuration_type):
+    def __init__(self, clientID, transformation_handles, task_objects_handles_and_bases, configuration_type, joint_handles_dict):
         self.clientID = clientID
         self.joint_handles = transformation_handles[:-1]
         self.task_object_handles_and_bases = task_objects_handles_and_bases
@@ -28,12 +28,12 @@ class JacobianCalculation:
         while result != vrep.simx_return_ok:
             result, _ = vrep.simxGetJointPosition(self.clientID, self.joint_handles[0], vrep.simx_opmode_buffer)
             time.sleep(0.01)
-        self.jacobian, self.Ts = self.calculateJacobian(configuration_type)
+        self.jacobian, self.Ts = self.calculateJacobian(configuration_type, joint_handles_dict)
 
     def updateClientID(self, clientID):
         self.clientID = clientID
 
-    def calculateJacobian(self, configuration_type):
+    def calculateJacobian(self, configuration_type, joint_handles_dict):
         rospack = rospkg.RosPack()
         jacobians_folder_path = rospack.get_path('pose_mapping_vrep') + "/scripts/jacobians/"
         if not os.path.isdir(jacobians_folder_path):
@@ -52,7 +52,7 @@ class JacobianCalculation:
 
         if not already_calculated:
             rospy.loginfo("Calculating Jacobian for hand part")
-            _, hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_tip', vrep.simx_opmode_blocking)
+            hand_base_handle = joint_handles_dict.getHandle('ShadowRobot_base_tip')
             objects_positions = {}
             for joint_handle in self.all_handles:
                 _, this_object_position = vrep.simxGetObjectPosition(self.clientID, joint_handle, hand_base_handle,

@@ -14,21 +14,24 @@ def degToRad(angle):
 
 
 class HandPart:
-    def __init__(self, clientID, list_joint_handles_names, tip_handle_name, task_descriptor_base_handles_and_indices, joints_limits, configuration_type, name):
+    def __init__(self, clientID, list_joint_handles_names, tip_handle_name, task_descriptor_base_handles_and_indices,
+                 joints_limits, configuration_type, name, joint_handles_dict):
         self.initialized = False
+        self.hand_base_handle = joint_handles_dict.getHandle('ShadowRobot_base_tip')
         self.clientID = clientID
         self.name = name
-        _, self.tip_handle = vrep.simxGetObjectHandle(self.clientID, tip_handle_name, vrep.simx_opmode_blocking)
+        self.tip_handle = joint_handles_dict.getHandle(tip_handle_name)
         self.list_joints_handles = []
         for joint_handle_name in list_joint_handles_names:
-            _, handle = vrep.simxGetObjectHandle(self.clientID, joint_handle_name, vrep.simx_opmode_blocking)
+            handle = joint_handles_dict.getHandle(joint_handle_name)
             self.list_joints_handles.append(handle)
 
-        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_tip', vrep.simx_opmode_blocking)
         handle_name_dict = dict(zip(list_joint_handles_names, self.list_joints_handles))
         handle_name_dict[tip_handle_name] = self.tip_handle
-        self.task_descriptor_handles = [handle_name_dict[joint_handle_name] for joint_handle_name in task_descriptor_base_handles_and_indices[0]]
-        self.base_handles = [handle_name_dict[joint_handle_name] for joint_handle_name in task_descriptor_base_handles_and_indices[1]]
+        self.task_descriptor_handles = [handle_name_dict[joint_handle_name] for joint_handle_name in
+                                        task_descriptor_base_handles_and_indices[0]]
+        self.base_handles = [handle_name_dict[joint_handle_name] for joint_handle_name in
+                             task_descriptor_base_handles_and_indices[1]]
         self.task_descriptor_equivalent_hpe_indices = task_descriptor_base_handles_and_indices[2]
         self.DOF_count = len(self.list_joints_handles)
         self.tasks_count = len(self.task_descriptor_handles)
@@ -38,12 +41,13 @@ class HandPart:
         self.damping_matrix = np.identity(3) * 0.00001  # for prioritization we use just single error
 
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
-        self.last_human_hand_part_pose = self.__simulationObjectsPose(
+        self.last_human_hand_part_pose = self.simulationObjectsPose(
             self.task_descriptor_handles, mode=vrep.simx_opmode_blocking)
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.tip_handle)
         self.jacobian_calculation = JacobianCalculation(self.clientID, all_handles_for_jacobian_calc,
-                                                        zip(self.task_descriptor_handles, self.base_handles), configuration_type)
+                                                        zip(self.task_descriptor_handles, self.base_handles),
+                                                        configuration_type, joint_handles_dict)
 
         for joint_handle in self.list_joints_handles:  # initialize streaming
             _, _ = vrep.simxGetJointPosition(self.clientID, joint_handle, vrep.simx_opmode_streaming)
@@ -68,7 +72,7 @@ class HandPart:
             for dummy_handle in self.dummy_targets_handles:
                 vrep.simxRemoveObject(self.clientID, dummy_handle, vrep.simx_opmode_blocking)
 
-    def __simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
+    def simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
         current_pos = []
         for handle in handles:
             _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, self.hand_base_handle, mode)
@@ -136,10 +140,10 @@ class HandPart:
 
     def __getError(self, index=None):
         if index is None:
-            current_pose = self.__simulationObjectsPose(self.task_descriptor_handles)
+            current_pose = self.simulationObjectsPose(self.task_descriptor_handles)
             return self.last_human_hand_part_pose - current_pose
         else:
-            current_pose = self.__simulationObjectsPose([self.task_descriptor_handles[index]])
+            current_pose = self.simulationObjectsPose([self.task_descriptor_handles[index]])
             return self.last_human_hand_part_pose[index * 3:index * 3 + 3] - current_pose
 
     def getAllTaskDescriptorsErrors(self):
@@ -165,7 +169,7 @@ class HandPart:
         jacobians = []
         pseudo_jacobian_inverses = []
         for task_index, _ in enumerate(self.task_descriptor_handles):
-            this_jacobian = whole_jacobian[..., task_index*3:task_index*3+3].T
+            this_jacobian = whole_jacobian[..., task_index * 3:task_index * 3 + 3].T
             jacobians.append(this_jacobian)
             this_pseudo_jacobian_inverse = np.linalg.multi_dot([self.weight_matrix_inv, this_jacobian.T, np.linalg.inv(
                 np.linalg.multi_dot([this_jacobian, self.weight_matrix_inv, this_jacobian.T]) + self.damping_matrix)])
@@ -200,28 +204,48 @@ class HandPart:
 
 
 class Hand:
-    def __init__(self, clientID, alpha):
+    def __init__(self, clientID, alpha, joint_handles_dict):
         self.clientID = clientID
 
-        index_finger = HandPart(self.clientID, ['IMCP_side_joint', 'IMCP_front_joint', 'IPIP_joint', 'IDIP_joint'], 'ITIP_tip',
+        index_finger = HandPart(self.clientID, ['IMCP_side_joint', 'IMCP_front_joint', 'IPIP_joint', 'IDIP_joint'],
+                                'ITIP_tip',
                                 [['ITIP_tip', 'IPIP_joint'], ['IMCP_side_joint', 'IMCP_side_joint'], [11, 9]],
-                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger, 'index')
-        middle_finger = HandPart(self.clientID, ['MMCP_side_joint', 'MMCP_front_joint', 'MPIP_joint', 'MDIP_joint'], 'MTIP_tip',
-                                [['MTIP_tip', 'MPIP_joint'], ['MMCP_side_joint', 'MMCP_side_joint'], [14, 12]],
-                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger, 'middle')
-        ring_finger = HandPart(self.clientID, ['RMCP_side_joint', 'RMCP_front_joint', 'RPIP_joint', 'RDIP_joint'], 'RTIP_tip',
-                                [['RTIP_tip', 'RPIP_joint'], ['RMCP_side_joint', 'RMCP_side_joint'], [17, 15]],
-                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger, 'ring')
-        pinkie_finger = HandPart(self.clientID, ['metacarpal_joint', 'PMCP_side_joint', 'PMCP_front_joint', 'PPIP_joint', 'PDIP_joint'], 'PTIP_tip',
-                                [['PTIP_tip', 'PPIP_joint'], ['metacarpal_joint', 'metacarpal_joint'], [20, 18]],
-                                [[45., 0.], [10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.pinkie, 'pinkie')
-        thumb_finger = HandPart(self.clientID, ['TMCP_rotation_joint', 'TMCP_front_joint', 'TPIP_side_joint', 'TPIP_front_joint', 'TDIP_joint'], 'TTIP_tip',
-                                [['TTIP_tip', 'TPIP_front_joint'], ['TMCP_rotation_joint', 'TMCP_rotation_joint'], [8, 6]],
-                                [[60., -60.], [70., 0.], [30., -30.], [12., -12.], [90, 0]], ConfigurationType.thumb, 'thumb')
+                                [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger, 'index',
+                                joint_handles_dict)
+        middle_finger = HandPart(self.clientID, ['MMCP_side_joint', 'MMCP_front_joint', 'MPIP_joint', 'MDIP_joint'],
+                                 'MTIP_tip',
+                                 [['MTIP_tip', 'MPIP_joint'], ['MMCP_side_joint', 'MMCP_side_joint'], [14, 12]],
+                                 [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger, 'middle',
+                                 joint_handles_dict)
+        ring_finger = HandPart(self.clientID, ['RMCP_side_joint', 'RMCP_front_joint', 'RPIP_joint', 'RDIP_joint'],
+                               'RTIP_tip',
+                               [['RTIP_tip', 'RPIP_joint'], ['RMCP_side_joint', 'RMCP_side_joint'], [17, 15]],
+                               [[10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.finger, 'ring',
+                               joint_handles_dict)
+        pinkie_finger = HandPart(self.clientID,
+                                 ['metacarpal_joint', 'PMCP_side_joint', 'PMCP_front_joint', 'PPIP_joint',
+                                  'PDIP_joint'], 'PTIP_tip',
+                                 [['PTIP_tip', 'PPIP_joint'], ['metacarpal_joint', 'metacarpal_joint'], [20, 18]],
+                                 [[45., 0.], [10., -10.], [100., 0.], [90., 0.], [90., 0.]], ConfigurationType.pinkie,
+                                 'pinkie', joint_handles_dict)
+        thumb_finger = HandPart(self.clientID,
+                                ['TMCP_rotation_joint', 'TMCP_front_joint', 'TPIP_side_joint', 'TPIP_front_joint',
+                                 'TDIP_joint'], 'TTIP_tip',
+                                [['TTIP_tip', 'TPIP_front_joint'], ['TMCP_rotation_joint', 'TMCP_rotation_joint'],
+                                 [8, 6]],
+                                [[60., -60.], [70., 0.], [30., -30.], [12., -12.], [90, 0]], ConfigurationType.thumb,
+                                'thumb', joint_handles_dict)
 
         self.alpha = alpha
         self.hand_parts_list = (index_finger, middle_finger, ring_finger, pinkie_finger, thumb_finger)
-        self.error_calculation = ErrorCalculation(list(self.hand_parts_list), 8)
+        self.error_calculation = ErrorCalculation(self.clientID, list(self.hand_parts_list),
+                                                  [['IPIP_joint', 'IDIP_joint', 'ITIP_tip'],
+                                                   ['MPIP_joint', 'MDIP_joint', 'MTIP_tip'],
+                                                   ['RPIP_joint', 'RDIP_joint', 'RTIP_tip'],
+                                                   ['PPIP_joint', 'PDIP_joint', 'PTIP_tip'],
+                                                   ['TPIP_front_joint', 'TDIP_joint', 'TTIP_tip']],
+                                                  [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
+                                                   [6, 7, 8]], 8, alpha, joint_handles_dict)
 
     def __del__(self):
         del self.error_calculation
@@ -236,4 +260,4 @@ class Hand:
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:
             hand_part.newPositionFromHPE(new_data, self.alpha)
-        self.error_calculation.newPositionFromHPE()
+        self.error_calculation.newPositionFromHPE(new_data)

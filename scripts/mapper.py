@@ -12,6 +12,7 @@ from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
 import tf_conversions
 from hand import Hand
+from joint_handles_dict import JointHandlesDict
 from FPS_counter import FPSCounter
 from scaler import Scaler
 
@@ -42,13 +43,14 @@ class Mapper:
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
         self.alpha = 0.2
-        self.hand = Hand(self.clientID, self.alpha)
+        self.joint_handles_dict = JointHandlesDict(self.clientID)
+        self.hand = Hand(self.clientID, self.alpha, self.joint_handles_dict)
         self.sampling_time = 0.05
 
-        _, self.hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_target', vrep.simx_opmode_blocking)
-        _, self.last_quaternion = vrep.simxGetObjectQuaternion(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
+        self.hand_base_target_handle = self.joint_handles_dict.getHandle('ShadowRobot_base_target')
+        _, self.last_quaternion = vrep.simxGetObjectQuaternion(self.clientID, self.hand_base_target_handle, -1, vrep.simx_opmode_blocking)
         self.last_quaternion = np.array(self.last_quaternion)
-        _, self.last_position = vrep.simxGetObjectPosition(self.clientID, self.hand_base_handle, -1, vrep.simx_opmode_blocking)
+        _, self.last_position = vrep.simxGetObjectPosition(self.clientID, self.hand_base_target_handle, -1, vrep.simx_opmode_blocking)
         self.last_position = np.array(self.last_position)
 
         self.FPSCounter = FPSCounter()
@@ -229,11 +231,11 @@ class Mapper:
         q = tf_conversions.transformations.quaternion_from_matrix(inverse_transformation_matrix)
         whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
         self.last_position = whole_translation * self.alpha + self.last_position * (1. - self.alpha)
-        vrep.simxSetObjectPosition(self.clientID, self.hand_base_handle, -1, self.last_position.tolist(), vrep.simx_opmode_oneshot)
+        vrep.simxSetObjectPosition(self.clientID, self.hand_base_target_handle, -1, self.last_position.tolist(), vrep.simx_opmode_oneshot)
         q = np.array(q) / np.linalg.norm(q)
         self.last_quaternion = q * self.alpha + self.last_quaternion * (1 - self.alpha)
         self.last_quaternion = self.last_quaternion / np.linalg.norm(self.last_quaternion)
-        vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_handle, -1, self.last_quaternion.tolist(), vrep.simx_opmode_oneshot)
+        vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_target_handle, -1, self.last_quaternion.tolist(), vrep.simx_opmode_oneshot)
         # _, dummy_handle = vrep.simxCreateDummy(self.clientID, 0.005, [255, 255, 255, 255], vrep.simx_opmode_blocking)
         # vrep.simxSetObjectPosition(self.clientID, dummy_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
         return inverse_transformation_matrix
