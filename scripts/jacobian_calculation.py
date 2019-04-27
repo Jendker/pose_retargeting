@@ -51,6 +51,7 @@ class JacobianCalculation:
                 already_calculated = True
 
         if not already_calculated:
+            rospy.loginfo("Calculating Jacobian for hand part")
             _, hand_base_handle = vrep.simxGetObjectHandle(self.clientID, 'ShadowRobot_base_tip', vrep.simx_opmode_blocking)
             objects_positions = {}
             for joint_handle in self.all_handles:
@@ -227,6 +228,7 @@ class JacobianCalculation:
             calculated_configuration = (Ts, jacobian)
             with open(jacobians_filename, 'wb') as handle:
                 pickle.dump(calculated_configuration, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            rospy.loginfo("Finished calculating Jacobian for hand part")
 
         lamb_jacobian = sp.lambdify(self.q, jacobian)
         lamb_Ts = [sp.lambdify(self.q, T) for T in Ts]
