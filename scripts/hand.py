@@ -17,6 +17,7 @@ class HandPart:
     def __init__(self, clientID, list_joint_handles_names, tip_handle_name, task_descriptor_base_handles_and_indices,
                  joints_limits, configuration_type, name, joint_handles_dict):
         self.initialized = False
+        self.task_prioritization = False
         self.hand_base_handle = joint_handles_dict.getHandle('ShadowRobot_base_tip')
         self.clientID = clientID
         self.name = name
@@ -36,9 +37,15 @@ class HandPart:
         self.DOF_count = len(self.list_joints_handles)
         self.tasks_count = len(self.task_descriptor_handles)
 
-        self.K_matrix = np.identity(3) * 2  # for prioritization we use just single error
+        if self.task_prioritization:
+            self.K_matrix = np.identity(3) * 2  # for prioritization we use just single error
+        else:
+            self.K_matrix = np.identity(3 * len(self.task_descriptor_handles)) * 2
         self.weight_matrix_inv = np.identity(self.DOF_count)
-        self.damping_matrix = np.identity(3) * 0.00001  # for prioritization we use just single error
+        if self.task_prioritization:
+            self.damping_matrix = np.identity(3) * 0.00001  # for prioritization we use just single error
+        else:
+            self.damping_matrix = np.identity(3 * len(self.task_descriptor_handles)) * 0.00001
 
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
         self.last_human_hand_part_pose = self.simulationObjectsPose(
@@ -132,12 +139,6 @@ class HandPart:
                 else:
                     time.sleep(0.2)
 
-    def __getPseudoInverseJacobian(self):
-        jacobian = self.jacobian_calculation.getJacobian()
-        jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T), axis=0)
-        return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, np.linalg.inv(
-            np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
-
     def __getError(self, index=None):
         if index is None:
             current_pose = self.simulationObjectsPose(self.task_descriptor_handles)
@@ -164,6 +165,14 @@ class HandPart:
         self.joint_velocity = q_vel
         self.__setJointsTargetVelocity(self.joint_velocity)
 
+    def taskAugmentation(self):
+        error = self.__getError()
+        self.__updateWeightMatrixInverse()
+        pseudo_inverse_jacobian = self.__getPseudoInverseForTaskAugmentation()
+        q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
+        self.joint_velocity = q_vel
+        self.__setJointsTargetVelocity(q_vel)
+
     def __getPseudoInverseForTaskPrioritization(self):
         whole_jacobian = self.jacobian_calculation.getJacobian()
         jacobians = []
@@ -176,8 +185,20 @@ class HandPart:
             pseudo_jacobian_inverses.append(this_pseudo_jacobian_inverse)
         return pseudo_jacobian_inverses, jacobians
 
+    def __getPseudoInverseForTaskAugmentation(self):
+        if len(self.task_descriptor_handles) != 2:
+            rospy.logerr("Task augmentation works currently only with 2 target handles. Current count: %d. Exiting.", len(self.task_descriptor_handles))
+            exit(1)
+        jacobian = self.jacobian_calculation.getJacobian()
+        jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T), axis=0)
+        return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, np.linalg.inv(
+            np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
+
     def executeControl(self):
-        self.taskPrioritization()
+        if self.task_prioritization:
+            self.taskPrioritization()
+        else:
+            self.taskAugmentation()
         self.first_inverse_calculation = False
 
     def newPositionFromHPE(self, new_data, alpha):
