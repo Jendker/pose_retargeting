@@ -245,7 +245,7 @@ class Hand:
                                                    ['PPIP_joint', 'PDIP_joint', 'PTIP_tip'],
                                                    ['TPIP_front_joint', 'TDIP_joint', 'TTIP_tip']],
                                                   [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
-                                                   [6, 7, 8]], 8, alpha, joint_handles_dict)
+                                                   [6, 7, 8]], 10, alpha, joint_handles_dict)
 
     def __del__(self):
         del self.error_calculation

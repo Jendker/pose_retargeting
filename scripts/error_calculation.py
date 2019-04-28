@@ -65,7 +65,7 @@ class ErrorCalculation:
                 whole_error += this_error
                 self.per_finger_errors[hand_part.getName()].append(this_error)
             self.errors.append(whole_error)
-            if self.last_hpe_update + 4. < time.time():
+            if self.last_hpe_update + 2. < time.time():
                 self.stop()
 
     def newPositionFromHPE(self, new_data):
@@ -97,5 +97,8 @@ class ErrorCalculation:
             file_name += hand_part.getName() + str(hand_part.taskDescriptorsCount())
         dict_to_save = self.per_finger_errors
         dict_to_save['whole_error'] = self.errors
-        scipy.io.savemat(folder_path + '/' + file_name + '.mat', mdict=dict_to_save)
+        whole_file_name = folder_path + '/' + file_name + '.mat'
+        if os.path.exists(whole_file_name):
+            os.remove(whole_file_name)
+        scipy.io.savemat(whole_file_name, mdict=dict_to_save)
 
