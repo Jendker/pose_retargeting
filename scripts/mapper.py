@@ -55,6 +55,7 @@ class Mapper:
 
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler()
+        rospy.loginfo("Pose mapping initialization finished.")
 
     def __del__(self):
         del self.hand  # not deleted properly, so executing explicitly
