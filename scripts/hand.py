@@ -187,7 +187,8 @@ class HandPart:
 
     def __getPseudoInverseForTaskAugmentation(self):
         if len(self.task_descriptor_handles) != 2:
-            rospy.logerr("Task augmentation works currently only with 2 target handles. Current count: %d. Exiting.", len(self.task_descriptor_handles))
+            rospy.logerr("Task augmentation works currently only with 2 target handles. Current count: %d. Exiting.",
+                         len(self.task_descriptor_handles))
             exit(1)
         jacobian = self.jacobian_calculation.getJacobian()
         jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T), axis=0)

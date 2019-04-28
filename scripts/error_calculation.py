@@ -79,12 +79,12 @@ class ErrorCalculation:
         if not self.running:
             self.running = True
             self.start_time = time.time()
-            rospy.loginfo("Starting calculation of errors for task descriptors.")
+            rospy.loginfo("Starting calculation of errors for finger joints.")
 
     def stop(self):
         self.running = False
         self.saveResults()
-        rospy.loginfo("Finished calculation of errors for task descriptors.")
+        rospy.loginfo("Finished calculation of errors for finger joints.")
 
     def saveResults(self):
         folder_path = '/media/psf/Dropbox/Forschungspraxis/error_results'  # laptop
