@@ -89,7 +89,7 @@ class ErrorCalculation:
     def saveResults(self):
         folder_path = '/media/psf/Dropbox/Forschungspraxis/error_results'  # laptop
         if not os.path.isdir('/media/psf/Dropbox/Forschungspraxis'):
-            folder_path = '~/Dropbox/Forschungspraxis/error_results'  # university computer
+            folder_path = '/home/jedrzej/Dropbox/Forschungspraxis/error_results'  # university computer
         if not os.path.isdir(folder_path):
             os.mkdir(folder_path)
         file_name = ''
