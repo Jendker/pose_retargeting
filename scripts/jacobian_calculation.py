@@ -51,7 +51,7 @@ class JacobianCalculation:
                 already_calculated = True
 
         if not already_calculated:
-            rospy.loginfo("Calculating Jacobian for hand part")
+            rospy.loginfo("Calculating Jacobian for hand part. Please wait")
             hand_base_handle = joint_handles_dict.getHandle('ShadowRobot_base_tip')
             objects_positions = {}
             for joint_handle in self.all_handles:
