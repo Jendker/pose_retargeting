@@ -62,24 +62,6 @@ class Mapper:
         # Close the connection to V-REP:
         vrep.simxFinish(self.clientID)
 
-    def skew(self, vector):
-        return np.array([[0, -vector[2], vector[1]],
-                         [vector[2], 0, -vector[0]],
-                         [-vector[1], vector[0], 0]])
-
-    def __getRotationMatrixFromVectors(self, desired_vector, given_vector):
-        desired_vector = desired_vector / np.linalg.norm(desired_vector)
-        given_vector = given_vector / np.linalg.norm(given_vector)
-        rotation_axis = np.cross(given_vector, desired_vector)
-        c = np.dot(given_vector, desired_vector)
-        if c == -1:
-            return np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
-
-        skew_mat = self.skew(rotation_axis)
-        # https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
-        rotation_matrix = np.identity(3) + skew_mat + np.dot(skew_mat, skew_mat) * (1.0 / (1.0 + c))
-        return rotation_matrix
-
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
         top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
         return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
@@ -237,8 +219,6 @@ class Mapper:
         self.last_quaternion = q * self.alpha + self.last_quaternion * (1 - self.alpha)
         self.last_quaternion = self.last_quaternion / np.linalg.norm(self.last_quaternion)
         vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_target_handle, -1, self.last_quaternion.tolist(), vrep.simx_opmode_oneshot)
-        # _, dummy_handle = vrep.simxCreateDummy(self.clientID, 0.005, [255, 255, 255, 255], vrep.simx_opmode_blocking)
-        # vrep.simxSetObjectPosition(self.clientID, dummy_handle, -1, whole_translation.tolist(), vrep.simx_opmode_oneshot)
         return inverse_transformation_matrix
 
     def __transformToCameraLink(self, data):
@@ -264,14 +244,13 @@ class Mapper:
     def callback(self, data):
         if self.using_left_hand:
             data = self.__mirrorData(data)
-        data = self.__transformToCameraLink(data)  # comment to keep hand in 0 position
+        data = self.__transformToCameraLink(data)
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
-        # self.__publishMarkers(data)
-        # self.publishNewPointCloud(data)
+        # self.__publishMarkers(data)  # to visualize results
+        # self.publishNewPointCloud(data)  # to visualize results
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
-        inverse_transformation_matrix = self.__setHandPosition(transformation_matrix)  # comment to keep hand in 0 position
-        # data = self.__returnTransformation(data, inverse_transformation_matrix)  # comment to keep hand in 0 position
+        self.__setHandPosition(transformation_matrix)
         self.last_data = data
 
         self.hand.newPositionFromHPE(self.last_data)
