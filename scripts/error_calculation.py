@@ -47,7 +47,8 @@ class ErrorCalculation:
             self.last_human_hand_pose.append(hand_part.simulationObjectsPose(self.joint_handles_for_errors[index]))
 
     def __del__(self):
-        self.saveResults()
+        # self.saveResults()
+        pass
 
     def handPartError(self, index):
         error = 0.

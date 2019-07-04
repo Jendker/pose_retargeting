@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import mujoco_py
 import vrep
 import numpy as np
 import time
@@ -10,7 +11,7 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import PointCloud
 from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
-import tf_conversions
+from transformations import quaternion_from_matrix
 from hand import Hand
 from joint_handles_dict import JointHandlesDict
 from FPS_counter import FPSCounter
@@ -178,7 +179,7 @@ class Mapper:
         t.transform.translation.y = transformation_matrix[1, 3]
         t.transform.translation.z = transformation_matrix[2, 3]
 
-        q = tf_conversions.transformations.quaternion_from_matrix(correct_rotation_matrix)
+        q = quaternion_from_matrix(correct_rotation_matrix)
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
@@ -211,7 +212,7 @@ class Mapper:
         translation = transformation_matrix[0:3, 3]
         inverse_translation = -np.dot(inverse_rotation_matrix, translation)
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
-        q = tf_conversions.transformations.quaternion_from_matrix(inverse_transformation_matrix)
+        q = quaternion_from_matrix(inverse_transformation_matrix)
         whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
         self.last_position = whole_translation * self.alpha + self.last_position * (1. - self.alpha)
         vrep.simxSetObjectPosition(self.clientID, self.hand_base_target_handle, -1, self.last_position.tolist(), vrep.simx_opmode_oneshot)

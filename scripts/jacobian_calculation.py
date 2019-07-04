@@ -16,7 +16,8 @@ class ConfigurationType(Enum):
 
 
 class JacobianCalculation:
-    def __init__(self, clientID, transformation_handles, task_objects_handles_and_bases, configuration_type, joint_handles_dict):
+    def __init__(self, clientID, transformation_handles, task_objects_handles_and_bases, configuration_type,
+                 joint_handles_dict):
         self.clientID = clientID
         self.joint_handles = transformation_handles[:-1]
         self.task_object_handles_and_bases = task_objects_handles_and_bases
@@ -35,11 +36,14 @@ class JacobianCalculation:
 
     def calculateJacobian(self, configuration_type, joint_handles_dict):
         rospack = rospkg.RosPack()
-        jacobians_folder_path = rospack.get_path('pose_mapping_vrep') + "/scripts/jacobians/"
+        try:
+            jacobians_folder_path = rospack.get_path('pose_mapping_vrep') + "/scripts/jacobians/"
+        except:
+            jacobians_folder_path = 'jacobians/'
         if not os.path.isdir(jacobians_folder_path):
             os.mkdir(jacobians_folder_path)
         jacobian_configuration = self.task_object_handles_and_bases
-        conf_string = np.array_str(np.array(jacobian_configuration)).replace("\n", "")
+        conf_string = np.array_str(np.array(list(jacobian_configuration))).replace("\n", "")
         jacobians_filename = jacobians_folder_path + conf_string + configuration_type.name + ".dat"
 
         already_calculated = False
