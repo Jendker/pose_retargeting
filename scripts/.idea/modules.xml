@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/pose_mapping_vrep.iml" filepath="$PROJECT_DIR$/.idea/pose_mapping_vrep.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/scripts.iml" filepath="$PROJECT_DIR$/.idea/scripts.iml" />
     </modules>
   </component>
 </project>
