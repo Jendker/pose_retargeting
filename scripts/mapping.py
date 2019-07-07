@@ -6,8 +6,9 @@ from dl_pose_estimation.msg import JointsPosition
 
 
 def run():
-    rospy.init_node('pose_mapping_vrep')
-    mapper = Mapper()
+    node_name = 'pose_mapping_vrep'
+    rospy.init_node(node_name)
+    mapper = Mapper(node_name)
     rospy.Subscriber("/dl_pose_estimation/joints_position", JointsPosition, mapper.callback)
 
     mapper.execute()

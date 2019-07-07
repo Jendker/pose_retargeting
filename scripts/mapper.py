@@ -13,24 +13,13 @@ from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
 from transformations import quaternion_from_matrix
 from hand import Hand
-from joint_handles_dict import JointHandlesDict
 from FPS_counter import FPSCounter
 from scaler import Scaler
+from simulator.sim_vrep import VRep
 
 
 class Mapper:
-    def __init__(self):
-        vrep.simxFinish(-1)  # just in case, close all opened connections
-        self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
-        while self.clientID == -1:
-            if rospy.is_shutdown():
-                return
-            rospy.loginfo("No connection to remote API server, retrying...")
-            vrep.simxFinish(-1)
-            time.sleep(3)
-            self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
-        rospy.loginfo('Connected to remote API server')
-
+    def __init__(self, node_name):
         self.last_callback_time = 0  # 0 means no callback yet
         self.last_data = []
         self.node_frame_name = "hand_vrep"
@@ -39,19 +28,20 @@ class Mapper:
         self.using_left_hand = rospy.get_param('transformation/left_hand')
         self.shift_translation = np.array([-1.5, 0., 0.25])
 
-        self.marker_pub = rospy.Publisher('pose_mapping_vrep/transformed_hand', MarkerArray, queue_size=10)
-        self.points_pub = rospy.Publisher('pose_mapping_vrep/in_base', PointCloud, queue_size=10)
+        self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
+        self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
         self.alpha = 0.2
-        self.joint_handles_dict = JointHandlesDict(self.clientID)
-        self.hand = Hand(self.clientID, self.alpha, self.joint_handles_dict)
+        self.simulator = VRep()
+        self.hand = Hand(self.alpha, self.simulator)
         self.sampling_time = 0.05
 
-        self.hand_base_target_handle = self.joint_handles_dict.getHandle('ShadowRobot_base_target')
-        _, self.last_quaternion = vrep.simxGetObjectQuaternion(self.clientID, self.hand_base_target_handle, -1, vrep.simx_opmode_blocking)
+        self.hand_base_target_handle = self.simulator.getHandle('ShadowRobot_base_target')
+        self.last_quaternion = self.simulator.getObjectQuaternion(self.hand_base_target_handle, -1, vrep.simx_opmode_blocking)
         self.last_quaternion = np.array(self.last_quaternion)
-        _, self.last_position = vrep.simxGetObjectPosition(self.clientID, self.hand_base_target_handle, -1, vrep.simx_opmode_blocking)
+        self.last_position = self.simulator.getObjectPosition(self.hand_base_target_handle, -1,
+                                                                 vrep.simx_opmode_blocking)
         self.last_position = np.array(self.last_position)
 
         self.FPSCounter = FPSCounter()
@@ -60,8 +50,8 @@ class Mapper:
 
     def __del__(self):
         del self.hand  # not deleted properly, so executing explicitly
-        # Close the connection to V-REP:
-        vrep.simxFinish(self.clientID)
+        # Close the connection to V-REP (if selected as simulator):
+        del self.simulator
 
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
         top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
@@ -215,11 +205,11 @@ class Mapper:
         q = quaternion_from_matrix(inverse_transformation_matrix)
         whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
         self.last_position = whole_translation * self.alpha + self.last_position * (1. - self.alpha)
-        vrep.simxSetObjectPosition(self.clientID, self.hand_base_target_handle, -1, self.last_position.tolist(), vrep.simx_opmode_oneshot)
+        self.simulator.setObjectPosition(self.hand_base_target_handle, -1, self.last_position.tolist())
         q = np.array(q) / np.linalg.norm(q)
         self.last_quaternion = q * self.alpha + self.last_quaternion * (1 - self.alpha)
         self.last_quaternion = self.last_quaternion / np.linalg.norm(self.last_quaternion)
-        vrep.simxSetObjectQuaternion(self.clientID, self.hand_base_target_handle, -1, self.last_quaternion.tolist(), vrep.simx_opmode_oneshot)
+        self.simulator.setObjectQuaternion(self.hand_base_target_handle, -1, self.last_quaternion.tolist())
         return inverse_transformation_matrix
 
     def __transformToCameraLink(self, data):
@@ -255,6 +245,10 @@ class Mapper:
         self.last_data = data
 
         self.hand.newPositionFromHPE(self.last_data)
+
+    def getControlOnce(self, observations):
+        self.FPSCounter.printFPS()
+        return self.hand.getControlOnce(observations)
 
     def __executeInverseOnce(self):
         self.hand.controlOnce()
