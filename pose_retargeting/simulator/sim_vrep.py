@@ -4,6 +4,7 @@ import numpy as np
 import rospy
 import time
 from pose_retargeting.joint_handles_dict import JointHandlesDict
+from pose_retargeting.jacobians.jacobian_calculation_vrep import JacobianCalculationVRep
 
 
 class VRep(Simulator):
@@ -29,6 +30,9 @@ class VRep(Simulator):
 
     def __del__(self):
         vrep.simxFinish(self.clientID)
+
+    def jacobianCalculation(self, *argv, **kwargs):
+        return JacobianCalculationVRep(*argv, **kwargs)
 
     def simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
         current_pos = []

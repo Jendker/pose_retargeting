@@ -3,8 +3,8 @@
 import pose_retargeting.vrep as vrep
 import numpy as np
 import rospy
-from pose_retargeting.jacobian_calculation import JacobianCalculation, ConfigurationType
 from pose_retargeting.error_calculation import ErrorCalculation
+from pose_retargeting.jacobians.jacobian_calculation_vrep import ConfigurationType
 import math
 import time
 
@@ -52,9 +52,9 @@ class HandPart:
             self.task_descriptor_handles, mode=vrep.simx_opmode_blocking)
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.tip_handle)
-        self.jacobian_calculation = JacobianCalculation(all_handles_for_jacobian_calc,
+        self.jacobian_calculation = self.simulator.jacobianCalculation(all_handles_for_jacobian_calc,
                                                         zip(self.task_descriptor_handles, self.base_handles),
-                                                        configuration_type, self.simulator)
+                                                        self.simulator, configuration_type=configuration_type)
 
         for joint_handle in self.list_joints_handles:  # initialize streaming
             simulator.getJointPosition(joint_handle, vrep.simx_opmode_streaming)
@@ -260,7 +260,7 @@ class Hand:
             hand_part.executeControl()
         self.error_calculation.calculateError()
 
-    def getControlOnce(self, observations):
+    def getControlOnce(self):
         action_dict = {}
         for hand_part in self.hand_parts_list:
             action_dict.update(hand_part.executeControl())

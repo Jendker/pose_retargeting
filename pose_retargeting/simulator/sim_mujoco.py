@@ -6,6 +6,7 @@ import mj_envs
 import numpy as np
 from pose_retargeting.transformations import quaternion_from_matrix
 from pose_retargeting.joint_handles_dict import JointHandlesDict
+from pose_retargeting.jacobians.jacobian_calculation_mujoco import JacobianCalculationMujoco
 
 
 def euclideanTransformation(rotationMatrix, transformationVector):
@@ -40,6 +41,9 @@ class Mujoco(Simulator):
         rotation_matrix = self.model.data.xmat[idx].reshape((3, 3))
         translation = self.model.data.body_xpos[idx].reshape((3, 1))
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
+    
+    def jacobianCalculation(self, *argv, **kwargs):
+        return JacobianCalculationMujoco(*argv, **kwargs)
 
     def simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
         if mode != vrep.simx_opmode_buffer:

@@ -7,6 +7,7 @@ import rospy
 import pickle
 import os
 import rospkg
+from pose_retargeting.jacobians.jacobian_calculation import JacobianCalculation
 
 
 class ConfigurationType(Enum):
@@ -15,9 +16,9 @@ class ConfigurationType(Enum):
     pinkie = 3
 
 
-class JacobianCalculation:
-    def __init__(self, transformation_handles, task_objects_handles_and_bases, configuration_type,
-                 simulator):
+class JacobianCalculationVRep(JacobianCalculation):
+    def __init__(self, transformation_handles, task_objects_handles_and_bases, simulator, *argv, **kwargs):
+        super().__init__(*argv, **kwargs)
         self.simulator = simulator
         self.joint_handles = transformation_handles[:-1]
         self.task_object_handles_and_bases = task_objects_handles_and_bases
@@ -29,7 +30,7 @@ class JacobianCalculation:
         while not result:
             result, _ = self.simulator.getJointPosition(self.joint_handles[0], vrep.simx_opmode_buffer)
             time.sleep(0.01)
-        self.jacobian, self.Ts = self.calculateJacobian(configuration_type)
+        self.jacobian, self.Ts = self.calculateJacobian(kwargs['configuration_type'])
 
     def calculateJacobian(self, configuration_type):
         rospack = rospkg.RosPack()
