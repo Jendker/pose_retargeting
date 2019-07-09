@@ -21,7 +21,7 @@ class JacobianCalculationVRep(JacobianCalculation):
         super().__init__(*argv, **kwargs)
         self.simulator = simulator
         self.joint_handles = transformation_handles[:-1]
-        self.task_object_handles_and_bases = task_objects_handles_and_bases
+        self.task_object_handles_and_bases = list(task_objects_handles_and_bases)
         self.all_handles = transformation_handles[:]  # contains also finger tip
         self.q = sp.symbols('q_0:{}'.format(len(self.joint_handles)))
         self.joint_handle_q_map = dict(zip(self.joint_handles, self.q))
@@ -41,7 +41,7 @@ class JacobianCalculationVRep(JacobianCalculation):
         if not os.path.isdir(jacobians_folder_path):
             os.mkdir(jacobians_folder_path)
         jacobian_configuration = self.task_object_handles_and_bases
-        conf_string = np.array_str(np.array(list(jacobian_configuration))).replace("\n", "")
+        conf_string = np.array_str(np.array(jacobian_configuration)).replace("\n", "")
         jacobians_filename = jacobians_folder_path + conf_string + configuration_type.name + ".dat"
 
         already_calculated = False
@@ -57,7 +57,7 @@ class JacobianCalculationVRep(JacobianCalculation):
             hand_base_handle = self.simulator.getHandle('ShadowRobot_base_tip')
             objects_positions = {}
             for joint_handle in self.all_handles:
-                _, this_object_position = self.simulator.getObjectPosition(joint_handle, hand_base_handle,
+                this_object_position = self.simulator.getObjectPosition(joint_handle, hand_base_handle,
                                                                            vrep.simx_opmode_blocking)
                 objects_positions[joint_handle] = np.array(this_object_position)
 

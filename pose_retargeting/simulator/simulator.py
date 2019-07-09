@@ -17,7 +17,7 @@ class Simulator:
     def setObjectPosition(self, handle, base_handle, position_to_set):
         raise NotImplementedError
 
-    def getObjectQuaternion(self, handle, parent_handle, mode):
+    def getObjectQuaternion(self, handle, **kwargs):
         raise NotImplementedError
 
     def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
@@ -34,3 +34,9 @@ class Simulator:
 
     def setJointTargetVelocity(self, handle, velocity, disable_warning_on_no_connection):
         raise NotImplementedError
+
+    def getHandBaseAction(self):
+        raise NotImplementedError
+
+    def getNumberOfJoints(self):
+        return 0

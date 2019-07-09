@@ -74,6 +74,7 @@ class HandPart:
 
     def __del__(self):
         zero_velocities = np.zeros(np.shape(self.list_joints_handles))
+        # TODO: Here take care of mujoco as well (get velocities from setJointTargetVelocities and set them before exit
         self.__setJointsTargetVelocity(zero_velocities)
         if self.initialized:
             for dummy_handle in self.dummy_targets_handles:
@@ -116,8 +117,15 @@ class HandPart:
             self.simulator.setObjectPosition(dummy_handle, self.hand_base_handle, dummy_position_list)
 
     def __setJointsTargetVelocity(self, joints_velocities):
-        for index, velocity in enumerate(joints_velocities):
-            self.simulator.setJointTargetVelocity(self.list_joints_handles[index], velocity, self.first_inverse_calculation)
+        if self.simulator.name == 'mujoco':
+            return joints_velocities
+        elif self.simulator.name == 'vrep':
+            for index, velocity in enumerate(joints_velocities):
+                self.simulator.setJointTargetVelocity(self.list_joints_handles[index], velocity,
+                                                      self.first_inverse_calculation)
+            return None
+        else:
+            raise ValueError
 
     def __getError(self, index=None):
         if index is None:
@@ -143,8 +151,7 @@ class HandPart:
             q_vel = q_vel + np.dot(np.dot(multiplier, pseudo_inverse_jacobians[index]), (self.human_hand_vel[index*3:index*3+3] + np.dot(self.K_matrix, error)))
             multiplier = np.dot(multiplier, np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index], jacobians[index]))
         self.joint_velocity = q_vel
-        self.__setJointsTargetVelocity(self.joint_velocity)
-        return self.joint_velocity
+        return self.__setJointsTargetVelocity(self.joint_velocity)
 
     def taskAugmentation(self):
         error = self.__getError()
@@ -152,8 +159,7 @@ class HandPart:
         pseudo_inverse_jacobian = self.__getPseudoInverseForTaskAugmentation()
         q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
         self.joint_velocity = q_vel
-        self.__setJointsTargetVelocity(self.joint_velocity)
-        return self.joint_velocity
+        return self.__setJointsTargetVelocity(self.joint_velocity)
 
     def __getPseudoInverseForTaskPrioritization(self):
         whole_jacobian = self.jacobian_calculation.getJacobian()
@@ -179,11 +185,19 @@ class HandPart:
 
     def executeControl(self):
         if self.task_prioritization:
-            ret = self.taskPrioritization()
+            joints_velocities = self.taskPrioritization()
         else:
-            ret = self.taskAugmentation()
+            joints_velocities = self.taskAugmentation()
         self.first_inverse_calculation = False
-        return ret
+        if self.simulator.name == 'mujoco':
+            joint_velocity_dict = {}
+            for index, velocity in enumerate(joints_velocities):
+                joint_velocity_dict[self.simulator.getJointHandleIndex(self.list_joints_handles[index])] = velocity
+            return joint_velocity_dict
+        elif self.simulator.name == 'vrep':
+            return None
+        else:
+            raise ValueError
 
     def newPositionFromHPE(self, new_data, alpha):
         current_time = time.time()
@@ -260,11 +274,22 @@ class Hand:
             hand_part.executeControl()
         self.error_calculation.calculateError()
 
-    def getControlOnce(self):
+    def getControlOnce(self, frequency):
         action_dict = {}
         for hand_part in self.hand_parts_list:
             action_dict.update(hand_part.executeControl())
-        return action_dict
+        for key, value in action_dict.items():
+            action_dict[key] = value * frequency
+        action_dict.update(self.simulator.getHandBaseAction())
+
+        complete_action_list = self.simulator.getHandBaseAction()
+        for i in range(6, self.simulator.getNumberOfJoints() + 6):
+            value = action_dict[i]
+            if value is None:
+                complete_action_list.append(0)
+            else:
+                complete_action_list.append(value)
+        return complete_action_list
 
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:

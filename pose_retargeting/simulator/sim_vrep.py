@@ -55,12 +55,16 @@ class VRep(Simulator):
     def setObjectPosition(self, handle, base_handle, position_to_set):
         vrep.simxSetObjectPosition(self.clientID, handle, base_handle, position_to_set, vrep.simx_opmode_oneshot)
 
-    def getObjectQuaternion(self, handle, parent_handle, mode):
-        return vrep.simxGetObjectQuaternion(self.clientID, handle, parent_handle, mode)[1]
+    def getObjectQuaternion(self, handle, **kwargs):
+        return vrep.simxGetObjectQuaternion(self.clientID, handle, kwargs['parent_handle'], kwargs['mode'])[1]
 
     def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
         vrep.simxSetObjectQuaternion(self.clientID, handle, parent_handle, quaternion_to_set,
                                        vrep.simx_opmode_oneshot)
+
+    def setHandPositionAndQuaternion(self, target_position, target_quaternion, **kwargs):
+        self.setObjectPosition(kwargs['handle'], kwargs['base_handle'], target_position.tolist())
+        self.setObjectQuaternion(kwargs['handle'], kwargs['base_handle'], target_quaternion.tolist())
 
     def removeObject(self, handle):
         vrep.simxRemoveObject(self.clientID, handle, vrep.simx_opmode_blocking)
@@ -81,3 +85,6 @@ class VRep(Simulator):
 
     def getObjectHandle(self, handle_name):
         return vrep.simxGetObjectHandle(self.clientID, handle_name, vrep.simx_opmode_blocking)
+
+    def getHandBaseAction(self):
+        return None
