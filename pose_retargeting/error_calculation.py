@@ -2,10 +2,10 @@
 
 import time
 import scipy.io
-import os
 import rospy
-import vrep
+import pose_retargeting.vrep as vrep
 import numpy as np
+import os
 
 
 class ErrorCalculation:

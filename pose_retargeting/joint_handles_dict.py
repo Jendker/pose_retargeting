@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import vrep
+import pose_retargeting.vrep as vrep
 import rospy
 
 

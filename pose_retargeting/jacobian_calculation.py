@@ -1,4 +1,4 @@
-import vrep
+import pose_retargeting.vrep as vrep
 from enum import Enum
 import sympy as sp
 import numpy as np

@@ -1,11 +1,11 @@
 from .simulator import Simulator
 import mujoco_py
-import vrep
+import pose_retargeting.vrep as vrep
 import six
 import mj_envs
 import numpy as np
-from transformations import quaternion_from_matrix
-from joint_handles_dict import JointHandlesDict
+from pose_retargeting.transformations import quaternion_from_matrix
+from pose_retargeting.joint_handles_dict import JointHandlesDict
 
 
 def euclideanTransformation(rotationMatrix, transformationVector):

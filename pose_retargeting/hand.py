@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-import vrep
+import pose_retargeting.vrep as vrep
 import numpy as np
 import rospy
-from jacobian_calculation import JacobianCalculation, ConfigurationType
-from error_calculation import ErrorCalculation
+from pose_retargeting.jacobian_calculation import JacobianCalculation, ConfigurationType
+from pose_retargeting.error_calculation import ErrorCalculation
 import math
 import time
 

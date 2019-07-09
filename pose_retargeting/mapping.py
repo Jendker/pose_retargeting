@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from mapper import Mapper
+from pose_retargeting.mapper import Mapper
 from dl_pose_estimation.msg import JointsPosition
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import mujoco_py
-import vrep
+import pose_retargeting.vrep as vrep
 import numpy as np
 import time
 import rospy
@@ -11,15 +11,15 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import PointCloud
 from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
-from transformations import quaternion_from_matrix
-from hand import Hand
-from FPS_counter import FPSCounter
-from scaler import Scaler
-from simulator.sim_vrep import VRep
+from pose_retargeting.transformations import quaternion_from_matrix
+from pose_retargeting.hand import Hand
+from pose_retargeting.FPS_counter import FPSCounter
+from pose_retargeting.scaler import Scaler
+from pose_retargeting.simulator.sim_vrep import VRep
 
 
 class Mapper:
-    def __init__(self, node_name):
+    def __init__(self, node_name, simulator=None):
         self.last_callback_time = 0  # 0 means no callback yet
         self.last_data = []
         self.node_frame_name = "hand_vrep"
@@ -33,7 +33,10 @@ class Mapper:
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
         self.alpha = 0.2
-        self.simulator = VRep()
+        self.simulator = simulator
+        if self.simulator is None:
+            self.simulator = VRep()
+
         self.hand = Hand(self.alpha, self.simulator)
         self.sampling_time = 0.05
 

@@ -1,9 +1,9 @@
 from .simulator import Simulator
-import vrep
+import pose_retargeting.vrep as vrep
 import numpy as np
 import rospy
 import time
-from joint_handles_dict import JointHandlesDict
+from pose_retargeting.joint_handles_dict import JointHandlesDict
 
 
 class VRep(Simulator):
