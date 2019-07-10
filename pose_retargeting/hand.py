@@ -52,9 +52,9 @@ class HandPart:
             self.task_descriptor_handles, mode=vrep.simx_opmode_blocking)
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.tip_handle)
-        self.jacobian_calculation = self.simulator.jacobianCalculation(all_handles_for_jacobian_calc,
-                                                        zip(self.task_descriptor_handles, self.base_handles),
-                                                        self.simulator, configuration_type=configuration_type)
+        self.jacobian_calculation = self.simulator.jacobianCalculation(
+            all_handles_for_jacobian_calc, zip(self.task_descriptor_handles, self.base_handles),
+            self.simulator, configuration_type=configuration_type)
 
         for joint_handle in self.list_joints_handles:  # initialize streaming
             simulator.getJointPosition(joint_handle, vrep.simx_opmode_streaming)
@@ -148,8 +148,10 @@ class HandPart:
         multiplier = np.identity(self.DOF_count)
         for index, task_handle in enumerate(self.task_descriptor_handles):
             error = self.__getError(index)
-            q_vel = q_vel + np.dot(np.dot(multiplier, pseudo_inverse_jacobians[index]), (self.human_hand_vel[index*3:index*3+3] + np.dot(self.K_matrix, error)))
-            multiplier = np.dot(multiplier, np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index], jacobians[index]))
+            q_vel = q_vel + np.dot(np.dot(multiplier, pseudo_inverse_jacobians[index]),
+                                   (self.human_hand_vel[index * 3:index * 3 + 3] + np.dot(self.K_matrix, error)))
+            multiplier = np.dot(multiplier,
+                                np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index], jacobians[index]))
         self.joint_velocity = q_vel
         return self.__setJointsTargetVelocity(self.joint_velocity)
 
@@ -192,7 +194,7 @@ class HandPart:
         if self.simulator.name == 'mujoco':
             joint_velocity_dict = {}
             for index, velocity in enumerate(joints_velocities):
-                joint_velocity_dict[self.simulator.getJointHandleIndex(self.list_joints_handles[index])] = velocity
+                joint_velocity_dict[self.simulator.getJointIndex(self.list_joints_handles[index])] = velocity
             return joint_velocity_dict
         elif self.simulator.name == 'vrep':
             return None
@@ -264,11 +266,6 @@ class Hand:
                                                   [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
                                                    [6, 7, 8]], 10, alpha, self.simulator)
 
-    def __del__(self):
-        del self.error_calculation
-        for hand_part in self.hand_parts_list:
-            del hand_part  # not deleted properly, so executing explicitly
-
     def controlOnce(self):
         for hand_part in self.hand_parts_list:
             hand_part.executeControl()
@@ -280,15 +277,13 @@ class Hand:
             action_dict.update(hand_part.executeControl())
         for key, value in action_dict.items():
             action_dict[key] = value * frequency
-        action_dict.update(self.simulator.getHandBaseAction())
 
         complete_action_list = self.simulator.getHandBaseAction()
-        for i in range(6, self.simulator.getNumberOfJoints() + 6):
-            value = action_dict[i]
-            if value is None:
+        for i in range(6, self.simulator.getNumberOfJoints()):
+            try:
+                complete_action_list.append(action_dict[i])
+            except KeyError:
                 complete_action_list.append(0)
-            else:
-                complete_action_list.append(value)
         return complete_action_list
 
     def newPositionFromHPE(self, new_data):

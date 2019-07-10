@@ -40,22 +40,9 @@ class Mapper:
         self.hand = Hand(self.alpha, self.simulator)
         self.sampling_time = 0.05
 
-        self.hand_base_target_handle = self.simulator.getHandle('ShadowRobot_base_target')
-        self.last_quaternion = self.simulator.getObjectQuaternion(self.hand_base_target_handle, parent_handle=-1,
-                                                                  mode=vrep.simx_opmode_blocking)
-        self.last_quaternion = np.array(self.last_quaternion)
-        self.last_position = self.simulator.getObjectPosition(self.hand_base_target_handle, -1,
-                                                              vrep.simx_opmode_blocking)
-        self.last_position = np.array(self.last_position)
-
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler()
         rospy.loginfo("Pose mapping initialization finished.")
-
-    def __del__(self):
-        del self.hand  # not deleted properly, so executing explicitly
-        # Close the connection to V-REP (if selected as simulator):
-        del self.simulator
 
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
         top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
@@ -208,12 +195,12 @@ class Mapper:
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
         q = quaternion_from_matrix(inverse_transformation_matrix)
         whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
-        self.last_position = whole_translation * self.alpha + self.last_position * (1. - self.alpha)
+        last_hand_position, last_hand_quaternion = self.simulator.getHandTargetPositionAndQuaternion()
+        new_hand_position = whole_translation * self.alpha + last_hand_position * (1. - self.alpha)
         q = np.array(q) / np.linalg.norm(q)
-        self.last_quaternion = q * self.alpha + self.last_quaternion * (1 - self.alpha)
-        self.last_quaternion = self.last_quaternion / np.linalg.norm(self.last_quaternion)
-        self.simulator.setHandPositionAndQuaternion(self.last_position, self.last_quaternion,
-                                                    handle=self.hand_base_target_handle, base_handle=-1)
+        new_hand_quaternion = q * self.alpha + last_hand_quaternion * (1 - self.alpha)
+        new_hand_quaternion = new_hand_quaternion / np.linalg.norm(new_hand_quaternion)
+        self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
         return inverse_transformation_matrix
 
     def __transformToCameraLink(self, data):

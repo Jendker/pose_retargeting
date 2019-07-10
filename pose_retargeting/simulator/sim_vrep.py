@@ -16,19 +16,26 @@ class VRep(Simulator):
         self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
         while self.clientID == -1:
             if rospy.is_shutdown():
-                return
+                exit(0)
             rospy.loginfo("No connection to remote API server, retrying...")
             vrep.simxFinish(-1)
             time.sleep(3)
             self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
-        rospy.loginfo('Connected to remote API server')
+        rospy.loginfo('Connected to remote API server.')
 
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_handle = self.getHandle('ShadowRobot_base_tip')
+        self.hand_base_target_handle = self.getHandle('ShadowRobot_base_target')
+
+        self.hand_target_position = np.array(self.getObjectPosition(self.hand_base_handle, -1,
+                                             vrep.simx_opmode_blocking))
+        self.hand_target_orientation = np.array(self.getObjectQuaternion(self.hand_base_handle, parent_handle=-1,
+                                                mode=vrep.simx_opmode_blocking))  # quaternion
 
         self.errors_in_connection = 0
 
     def __del__(self):
+        rospy.loginfo('Closing connection to remote API server.')
         vrep.simxFinish(self.clientID)
 
     def jacobianCalculation(self, *argv, **kwargs):
@@ -60,18 +67,20 @@ class VRep(Simulator):
 
     def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
         vrep.simxSetObjectQuaternion(self.clientID, handle, parent_handle, quaternion_to_set,
-                                       vrep.simx_opmode_oneshot)
+                                     vrep.simx_opmode_oneshot)
 
-    def setHandPositionAndQuaternion(self, target_position, target_quaternion, **kwargs):
-        self.setObjectPosition(kwargs['handle'], kwargs['base_handle'], target_position.tolist())
-        self.setObjectQuaternion(kwargs['handle'], kwargs['base_handle'], target_quaternion.tolist())
+    def setHandTargetPositionAndQuaternion(self, target_position, target_quaternion):
+        self.hand_target_position = target_position
+        self.hand_target_orientation = target_quaternion
+        self.setObjectPosition(self.hand_base_target_handle, -1, target_position.tolist())
+        self.setObjectQuaternion(self.hand_base_target_handle, -1, target_quaternion.tolist())
 
     def removeObject(self, handle):
         vrep.simxRemoveObject(self.clientID, handle, vrep.simx_opmode_blocking)
 
     def createDummy(self, size, color):
         return vrep.simxCreateDummy(self.clientID, size, color, vrep.simx_opmode_blocking)[1]
-    
+
     def setJointTargetVelocity(self, handle, velocity, disable_warning_on_no_connection):
         result = vrep.simxSetJointTargetVelocity(self.clientID, handle, velocity, vrep.simx_opmode_oneshot)
         if result != 0 and not disable_warning_on_no_connection:

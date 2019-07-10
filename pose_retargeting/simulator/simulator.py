@@ -29,6 +29,9 @@ class Simulator:
     def getHandle(self, handle):
         return self.joint_handles_dict.getHandle(handle)
 
+    def getHandTargetPositionAndQuaternion(self):
+        return self.hand_target_position, self.hand_target_orientation
+
     def createDummy(self, size, color):
         raise NotImplementedError
 
