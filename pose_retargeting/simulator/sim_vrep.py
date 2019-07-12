@@ -1,4 +1,4 @@
-from .simulator import Simulator
+from pose_retargeting.simulator.simulator import Simulator, SimulatorType
 import pose_retargeting.vrep as vrep
 import numpy as np
 import rospy
@@ -10,7 +10,7 @@ from pose_retargeting.jacobians.jacobian_calculation_vrep import JacobianCalcula
 class VRep(Simulator):
     def __init__(self):
         super().__init__()
-        self.name = 'vrep'
+        self.type = SimulatorType.VREP
 
         vrep.simxFinish(-1)  # just in case, close all opened connections
         self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
@@ -97,3 +97,6 @@ class VRep(Simulator):
 
     def getHandBaseAction(self):
         return None
+
+    def getJointIndexPosition(self, index):
+        return 0  # not needed, just return 0

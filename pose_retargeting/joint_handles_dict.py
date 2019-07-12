@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-import pose_retargeting.vrep as vrep
 import rospy
+import pose_retargeting.vrep as vrep
+from pose_retargeting.simulator.simulator import SimulatorType
 
 
 class JointHandlesDict:
@@ -13,7 +14,7 @@ class JointHandlesDict:
                               'PDIP_joint', 'PTIP_tip', 'TMCP_rotation_joint', 'TMCP_front_joint', 'TPIP_side_joint',
                               'TPIP_front_joint', 'TDIP_joint', 'TTIP_tip', 'ShadowRobot_base_target',
                               'ShadowRobot_base_tip']
-        if simulator.name == 'vrep':
+        if simulator.type == SimulatorType.VREP:
             self.body_handles_dict = {}
             for handle_name in body_handle_names:
                 result, handle = simulator.getObjectHandle(handle_name)
@@ -22,7 +23,7 @@ class JointHandlesDict:
                     exit(1)
                 self.body_handles_dict[handle_name] = handle
 
-        elif simulator.name == 'mujoco':
+        elif simulator.type == SimulatorType.MUJOCO:
             joint_body_pairs_dict = {'rh_FFJ4': 'rh_ffknuckle', 'rh_FFJ3': 'rh_ffproximal',
                                           'rh_FFJ2': 'rh_ffmiddle', 'rh_FFJ1': 'rh_ffdistal',
                                           'rh_fftip': 'rh_fftip', 'rh_MFJ4': 'rh_mfknuckle',

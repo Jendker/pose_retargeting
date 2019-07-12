@@ -5,6 +5,7 @@ import numpy as np
 import rospy
 from pose_retargeting.error_calculation import ErrorCalculation
 from pose_retargeting.jacobians.jacobian_calculation_vrep import ConfigurationType
+from pose_retargeting.simulator.simulator import SimulatorType
 import math
 import time
 
@@ -109,6 +110,8 @@ class HandPart:
         self.weight_matrix_inv = np.linalg.inv(weight_matrix)
 
     def __updateTargetDummiesPoses(self):
+        if self.simulator.type != SimulatorType.VREP:
+            return
         last_pose = self.last_human_hand_part_pose.copy()
         for index, dummy_handle in enumerate(self.dummy_targets_handles):
             start_index = index * 3
@@ -117,9 +120,9 @@ class HandPart:
             self.simulator.setObjectPosition(dummy_handle, self.hand_base_handle, dummy_position_list)
 
     def __setJointsTargetVelocity(self, joints_velocities):
-        if self.simulator.name == 'mujoco':
+        if self.simulator.type == SimulatorType.MUJOCO:
             return joints_velocities
-        elif self.simulator.name == 'vrep':
+        elif self.simulator.type == SimulatorType.VREP:
             for index, velocity in enumerate(joints_velocities):
                 self.simulator.setJointTargetVelocity(self.list_joints_handles[index], velocity,
                                                       self.first_inverse_calculation)
@@ -191,12 +194,12 @@ class HandPart:
         else:
             joints_velocities = self.taskAugmentation()
         self.first_inverse_calculation = False
-        if self.simulator.name == 'mujoco':
+        if self.simulator.type == SimulatorType.MUJOCO:
             joint_velocity_dict = {}
             for index, velocity in enumerate(joints_velocities):
                 joint_velocity_dict[self.simulator.getJointIndex(self.list_joints_handles[index])] = velocity
             return joint_velocity_dict
-        elif self.simulator.name == 'vrep':
+        elif self.simulator.type == SimulatorType.VREP:
             return None
         else:
             raise ValueError
@@ -276,12 +279,12 @@ class Hand:
         for hand_part in self.hand_parts_list:
             action_dict.update(hand_part.executeControl())
         for key, value in action_dict.items():
-            action_dict[key] = value * frequency
+            action_dict[key] = value / frequency
 
         complete_action_list = self.simulator.getHandBaseAction()
         for i in range(6, self.simulator.getNumberOfJoints()):
             try:
-                complete_action_list.append(action_dict[i])
+                complete_action_list.append(action_dict[i] + self.simulator.getJointIndexPosition(i))
             except KeyError:
                 complete_action_list.append(0)
         return complete_action_list

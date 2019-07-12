@@ -238,7 +238,7 @@ class Mapper:
         self.hand.newPositionFromHPE(self.last_data)
 
     def getControlOnce(self):
-        frequency = self.FPSCounter.printFPS()
+        frequency = self.FPSCounter.getAndPrintFPS()
         return self.hand.getControlOnce(frequency)
 
     def __executeInverseOnce(self):
@@ -248,6 +248,6 @@ class Mapper:
         start_time = time.time()
         while not rospy.is_shutdown():
             self.__executeInverseOnce()
-            self.FPSCounter.printFPS()
+            self.FPSCounter.getAndPrintFPS()
             time.sleep(self.sampling_time - ((time.time() - start_time) % self.sampling_time))
             self.last_update = time.time()

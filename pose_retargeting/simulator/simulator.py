@@ -1,3 +1,11 @@
+from enum import Enum
+
+
+class SimulatorType(Enum):
+    VREP = 1,
+    MUJOCO = 2
+
+
 class Simulator:
     def __init__(self):
         pass
@@ -43,3 +51,6 @@ class Simulator:
 
     def getNumberOfJoints(self):
         return 0
+
+    def getJointIndexPosition(self, index):
+        raise NotImplementedError

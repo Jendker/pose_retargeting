@@ -1,4 +1,4 @@
-from .simulator import Simulator
+from pose_retargeting.simulator.simulator import Simulator, SimulatorType
 import mujoco_py
 import pose_retargeting.vrep as vrep
 import mj_envs
@@ -18,7 +18,7 @@ def euclideanTransformation(rotation_matrix, transformation_vector):
 class Mujoco(Simulator):
     def __init__(self, env):
         super().__init__()
-        self.name = 'mujoco'
+        self.type = SimulatorType.MUJOCO
         self.env = env.env.env
         self.last_observations = []
         self.model = self.env.model
@@ -65,6 +65,10 @@ class Mujoco(Simulator):
             return
         idx = self.model.joint_names.index(self.getBodyJointName(body_name))
         return [True, self.data.qpos[idx]]
+
+    def getJointIndexPosition(self, index):
+        assert(len(self.data.qpos) == len(self.data.qvel))
+        return self.data.qpos[index]
 
     def getObjectPosition(self, body_name, parent_handle, mode=None):
         idx = self.model.body_names.index(body_name)
@@ -115,6 +119,9 @@ class Mujoco(Simulator):
 
     def removeObject(self, handle):
         pass
+
+    def getHandTargetPositionAndQuaternion(self):
+        return self.hand_target_position, transformations.quaternion_from_euler(*self.hand_target_orientation)
 
     def createDummy(self, size, color):
         return None
