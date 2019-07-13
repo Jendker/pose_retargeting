@@ -58,7 +58,7 @@ class JacobianCalculationVRep(JacobianCalculation):
             objects_positions = {}
             for joint_handle in self.all_handles:
                 this_object_position = self.simulator.getObjectPosition(joint_handle, hand_base_handle,
-                                                                           vrep.simx_opmode_blocking)
+                                                                        mode=vrep.simx_opmode_blocking)
                 objects_positions[joint_handle] = np.array(this_object_position)
 
             jacobian = sp.zeros(len(self.joint_handles), 3 * len(self.task_object_handles_and_bases))

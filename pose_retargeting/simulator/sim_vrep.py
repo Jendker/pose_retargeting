@@ -28,7 +28,7 @@ class VRep(Simulator):
         self.hand_base_target_handle = self.getHandle('ShadowRobot_base_target')
 
         self.hand_target_position = np.array(self.getObjectPosition(self.hand_base_handle, -1,
-                                             vrep.simx_opmode_blocking))
+                                             mode=vrep.simx_opmode_blocking))
         self.hand_target_orientation = np.array(self.getObjectQuaternion(self.hand_base_handle, parent_handle=-1,
                                                 mode=vrep.simx_opmode_blocking))  # quaternion
 
@@ -52,8 +52,8 @@ class VRep(Simulator):
         result, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, mode)
         return [result == vrep.simx_return_ok, joint_position]
 
-    def getObjectPosition(self, handle, parent_handle, mode):
-        return vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, mode)[1]
+    def getObjectPosition(self, handle, parent_handle, **kwargs):
+        return vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, kwargs['mode'])[1]
 
     def getObjectPositionWithReturn(self, handle, parent_handle, mode):
         result, object_position = vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, mode)

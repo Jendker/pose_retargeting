@@ -70,7 +70,11 @@ class Mujoco(Simulator):
         assert(len(self.data.qpos) == len(self.data.qvel))
         return self.data.qpos[index]
 
-    def getObjectPosition(self, body_name, parent_handle, mode=None):
+    def getJointNamePosition(self, joint_name):
+        idx = self.model.joint_names.index(joint_name)
+        return self.data.qpos[idx]
+
+    def getObjectPosition(self, body_name, parent_handle, **kwargs):
         idx = self.model.body_names.index(body_name)
         return self.getObjectIndexPosition(idx, parent_handle)
 
@@ -102,7 +106,7 @@ class Mujoco(Simulator):
         return self.data.body_xquat[index]
 
     def getObjectPositionWithReturn(self, handle, parent_handle, mode=None):
-        return [True, self.getObjectPosition(handle, parent_handle, mode)]
+        return [True, self.getObjectPosition(handle, parent_handle, mode=mode)]
 
     def setJointTargetVelocity(self, handle, velocity, disable_warning_on_no_connection):
         raise NotImplementedError

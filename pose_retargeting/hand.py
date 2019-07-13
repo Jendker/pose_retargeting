@@ -58,9 +58,9 @@ class HandPart:
             self.simulator, configuration_type=configuration_type)
 
         for joint_handle in self.list_joints_handles:  # initialize streaming
-            simulator.getJointPosition(joint_handle, vrep.simx_opmode_streaming)
+            simulator.getJointPosition(joint_handle, mode=vrep.simx_opmode_streaming)
         for handle in self.task_descriptor_handles:
-            simulator.getObjectPosition(handle, self.hand_base_handle, vrep.simx_opmode_streaming)
+            simulator.getObjectPosition(handle, self.hand_base_handle, mode=vrep.simx_opmode_streaming)
 
         self.joint_velocity = np.zeros(self.DOF_count)
         self.joints_limits = []

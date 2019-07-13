@@ -16,7 +16,7 @@ class Simulator:
     def getJointPosition(self, joint_handle, mode):
         raise NotImplementedError
 
-    def getObjectPosition(self, handle, parent_handle, mode):
+    def getObjectPosition(self, handle, parent_handle, **kwargs):
         raise NotImplementedError
 
     def getObjectPositionWithReturn(self, handle, parent_handle, mode):
