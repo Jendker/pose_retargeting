@@ -13,14 +13,14 @@ class FPSCounter:
         self.time_between_calls = []
         self.elements_for_mean = 20
 
-    def getAndPrintFPS(self):
+    def getAndPrintFPS(self, print_fps=True):
         current_time = time.time()
         self.time_between_calls.append(1.0/(current_time - self.last_time))
         if len(self.time_between_calls) > self.elements_for_mean:
             self.time_between_calls.pop(0)
         self.last_time = current_time
         frequency = np.mean(self.time_between_calls)
-        if (current_time - self.start_time_for_display) > self.x:
+        if (current_time - self.start_time_for_display) > self.x and print_fps:
             print("Frequency: {}Hz".format(int(frequency)))
             self.start_time_for_display = current_time
         return frequency
