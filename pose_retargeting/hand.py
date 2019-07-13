@@ -84,7 +84,8 @@ class HandPart:
     def __createTargetDummies(self):
         dummy_targets = []
         for i in range(0, self.tasks_count):
-            dummy_target = self.simulator.createDummy(0.02, [255 * (i % 3), 255 * ((i + 1) % 3), 255 * ((i + 2) % 3), 255])
+            dummy_target = self.simulator.createDummy(0.02,
+                                                      [255 * (i % 3), 255 * ((i + 1) % 3), 255 * ((i + 2) % 3), 255])
             dummy_targets.append(dummy_target)
         return dummy_targets
 
@@ -103,8 +104,9 @@ class HandPart:
                 w = 1.0
             else:
                 performance_gradient = (((joint_max - joint_min) ** 2) * (2.0 * joint_position - joint_max - joint_min)
-                                        ) / float(4.0 * ((joint_max - joint_position) ** 2) * ((joint_position - joint_min) ** 2)
-                                                  + 0.0000001)
+                                        ) / float(
+                    4.0 * ((joint_max - joint_position) ** 2) * ((joint_position - joint_min) ** 2)
+                    + 0.0000001)
                 w = 1.0 + abs(performance_gradient)
             weight_matrix[index, index] = w
         self.weight_matrix_inv = np.linalg.inv(weight_matrix)
@@ -194,13 +196,13 @@ class HandPart:
         else:
             joints_velocities = self.taskAugmentation()
         self.first_inverse_calculation = False
-        if self.simulator.type == SimulatorType.MUJOCO:
+        if self.simulator.type == SimulatorType.VREP:
+            return None
+        elif self.simulator.type == SimulatorType.MUJOCO:
             joint_velocity_dict = {}
             for index, velocity in enumerate(joints_velocities):
                 joint_velocity_dict[self.simulator.getJointIndex(self.list_joints_handles[index])] = velocity
             return joint_velocity_dict
-        elif self.simulator.type == SimulatorType.VREP:
-            return None
         else:
             raise ValueError
 
@@ -277,17 +279,17 @@ class Hand:
     def getControlOnce(self, frequency):
         action_dict = {}
         for hand_part in self.hand_parts_list:
-            action_dict.update(hand_part.executeControl())
+            action_dict.update(hand_part.executeControl())  # given as velocities
         for key, value in action_dict.items():
-            action_dict[key] = value / frequency
+            action_dict[key] = value / frequency  # integrate the velocity
 
-        complete_action_list = self.simulator.getHandBaseAction()
-        for i in range(6, self.simulator.getNumberOfJoints()):
-            try:
-                complete_action_list.append(action_dict[i] + self.simulator.getJointIndexPosition(i))
-            except KeyError:
-                complete_action_list.append(0)
-        return complete_action_list
+        complete_action_vector = self.simulator.getHandBaseAction()
+        complete_action_vector = np.pad(complete_action_vector, (0, self.simulator.getNumberOfJoints() -
+                                                                 complete_action_vector.size), 'constant',
+                                        constant_values=0)
+        for k, v in action_dict.items():
+            complete_action_vector[k] = v + self.simulator.getJointIndexPosition(k)  # add position step to current
+        return complete_action_vector
 
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:

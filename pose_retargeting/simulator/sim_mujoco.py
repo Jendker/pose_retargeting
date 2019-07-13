@@ -67,7 +67,7 @@ class Mujoco(Simulator):
         return [True, self.data.qpos[idx]]
 
     def getJointIndexPosition(self, index):
-        assert(len(self.data.qpos) == len(self.data.qvel))
+        assert(len(self.data.qpos) == len(self.data.qvel))  # need to make sure, for some envs this is not the same
         return self.data.qpos[index]
 
     def getJointNamePosition(self, joint_name):
@@ -140,7 +140,7 @@ class Mujoco(Simulator):
         return self.data.get_body_jacp(body_name).reshape(3, -1)
 
     def getHandBaseAction(self):
-        return np.concatenate((self.hand_target_position, self.hand_target_orientation)).tolist()
+        return np.concatenate((self.hand_target_position, self.hand_target_orientation))
 
     def getNumberOfJoints(self):
         return self.data.qvel.size
