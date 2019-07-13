@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-import mujoco_py
-import pose_retargeting.vrep as vrep
 import numpy as np
 import time
 import rospy

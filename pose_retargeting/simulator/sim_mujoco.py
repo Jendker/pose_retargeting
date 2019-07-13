@@ -1,7 +1,5 @@
 from pose_retargeting.simulator.simulator import Simulator, SimulatorType
-import mujoco_py
 import pose_retargeting.vrep as vrep
-import mj_envs
 import numpy as np
 import pose_retargeting.transformations as transformations
 from pose_retargeting.joint_handles_dict import JointHandlesDict
