@@ -14,13 +14,14 @@ def euclideanTransformation(rotation_matrix, transformation_vector):
 
 
 class Mujoco(Simulator):
-    def __init__(self, env):
+    def __init__(self, env, env_name):
         super().__init__()
         self.type = SimulatorType.MUJOCO
         self.env = env.env.env
         self.last_observations = []
         self.model = self.env.model
         self.data = self.env.data
+        self.env_name = env_name
         self.joint_handles_dict = JointHandlesDict(self)
         hand_base_name = self.getHandle('ShadowRobot_base_tip')
         self.hand_base_index = self.model.body_names.index(hand_base_name)

@@ -24,39 +24,32 @@ class JointHandlesDict:
                 self.body_handles_dict[handle_name] = handle
 
         elif simulator.type == SimulatorType.MUJOCO:
-            joint_body_pairs_dict = {'rh_FFJ4': 'rh_ffknuckle', 'rh_FFJ3': 'rh_ffproximal',
-                                          'rh_FFJ2': 'rh_ffmiddle', 'rh_FFJ1': 'rh_ffdistal',
-                                          'rh_fftip': 'rh_fftip', 'rh_MFJ4': 'rh_mfknuckle',
-                                          'rh_MFJ3': 'rh_mfproximal', 'rh_MFJ2': 'rh_mfmiddle',
-                                          'rh_MFJ1': 'rh_mfdistal', 'rh_mftip': 'rh_mftip',
-                                          'rh_RFJ4': 'rh_rfknuckle', 'rh_RFJ3': 'rh_rfproximal',
-                                          'rh_RFJ2': 'rh_rfmiddle', 'rh_RFJ1': 'rh_rfdistal',
-                                          'rh_rftip': 'rh_rftip',
-                                          'rh_LFJ5': 'rh_lfmetacarpal', 'rh_LFJ4': 'rh_lfknuckle',
-                                          'rh_LFJ3': 'rh_lfproximal', 'rh_LFJ2': 'rh_lfmiddle',
-                                          'rh_LFJ1': 'rh_lfdistal', 'rh_lftip': 'rh_lftip',
-                                          'rh_THJ5': 'rh_thbase', 'rh_THJ4': 'rh_thproximal',
-                                          'rh_THJ3': 'rh_thhub', 'rh_THJ2': 'rh_thmiddle',
-                                          'rh_THJ1': 'rh_thdistal', 'rh_thtip': 'rh_thtip',
-                                          'rh_forearm': 'rh_forearm'}
+            if simulator.name == 'relocateSR-v0':
+                joint_names = ['rh_FFJ4', 'rh_FFJ3', 'rh_FFJ2', 'rh_FFJ1', 'rh_fftip', 'rh_MFJ4', 'rh_MFJ3', 'rh_MFJ2',
+                               'rh_MFJ1', 'rh_mftip', 'rh_RFJ4', 'rh_RFJ3', 'rh_RFJ2', 'rh_RFJ1', 'rh_rftip', 'rh_LFJ5',
+                               'rh_LFJ4', 'rh_LFJ3', 'rh_LFJ2', 'rh_LFJ1', 'rh_lftip', 'rh_THJ5', 'rh_THJ4', 'rh_THJ3',
+                               'rh_THJ2', 'rh_THJ1', 'rh_thtip', 'rh_forearm']
+                body_names = ['rh_ffknuckle', 'rh_ffproximal', 'rh_ffmiddle', 'rh_ffdistal', 'rh_fftip', 'rh_mfknuckle',
+                              'rh_mfproximal', 'rh_mfmiddle', 'rh_mfdistal', 'rh_mftip', 'rh_rfknuckle', 'rh_rfproximal',
+                              'rh_rfmiddle', 'rh_rfdistal', 'rh_rftip', 'rh_lfmetacarpal', 'rh_lfknuckle', 'rh_lfproximal',
+                              'rh_lfmiddle', 'rh_lfdistal', 'rh_lftip', 'rh_thbase', 'rh_thproximal', 'rh_thhub',
+                              'rh_thmiddle', 'rh_thdistal', 'rh_thtip', 'rh_forearm']
+            elif simulator.name == 'relocate-v0':
+                joint_names = ['FFJ3', 'FFJ2', 'FFJ1', 'FFJ0', 'fftip', 'MFJ3', 'MFJ2', 'MFJ1',
+                               'MFJ0', 'mftip', 'RFJ3', 'RFJ2', 'RFJ1', 'RFJ0', 'rftip', 'LFJ4',
+                               'LFJ3', 'LFJ2', 'LFJ1', 'LFJ0', 'lftip', 'THJ4', 'THJ3', 'THJ2',
+                               'THJ1', 'THJ0', 'thtip', 'forearm']  # we lack the tip bodies
 
-            joint_handles_dict = {'IMCP_side_joint': 'rh_FFJ4', 'IMCP_front_joint': 'rh_FFJ3',
-                                       'IPIP_joint': 'rh_FFJ2', 'IDIP_joint': 'rh_FFJ1',
-                                       'ITIP_tip': 'rh_fftip', 'MMCP_side_joint': 'rh_MFJ4',
-                                       'MMCP_front_joint': 'rh_MFJ3', 'MPIP_joint': 'rh_MFJ2',
-                                       'MDIP_joint': 'rh_MFJ1', 'MTIP_tip': 'rh_mftip',
-                                       'RMCP_side_joint': 'rh_RFJ4', 'RMCP_front_joint': 'rh_RFJ3',
-                                       'RPIP_joint': 'rh_RFJ2', 'RDIP_joint': 'rh_RFJ1', 'RTIP_tip': 'rh_rftip',
-                                       'metacarpal_joint': 'rh_LFJ5', 'PMCP_side_joint': 'rh_LFJ4',
-                                       'PMCP_front_joint': 'rh_LFJ3', 'PPIP_joint': 'rh_LFJ2',
-                                       'PDIP_joint': 'rh_LFJ1', 'PTIP_tip': 'rh_lftip',
-                                       'TMCP_rotation_joint': 'rh_THJ5', 'TMCP_front_joint': 'rh_THJ4',
-                                       'TPIP_side_joint': 'rh_THJ3', 'TPIP_front_joint': 'rh_THJ2',
-                                       'TDIP_joint': 'rh_THJ1', 'TTIP_tip': 'rh_thtip',
-                                       'ShadowRobot_base_tip': 'rh_forearm'}
+                body_names = ['ffknuckle', 'ffproximal', 'ffmiddle', 'ffdistal', 'fftip', 'mfknuckle',
+                              'mfproximal', 'mfmiddle', 'mfdistal', 'mftip', 'rfknuckle', 'rfproximal',
+                              'rfmiddle', 'rfdistal', 'rftip', 'lfmetacarpal', 'lfknuckle', 'lfproximal',
+                              'lfmiddle', 'lfdistal', 'lftip', 'thbase', 'thproximal', 'thhub',
+                              'thmiddle', 'thdistal', 'thtip', 'forearm']  # we lack the tip bodies
+            else:
+                raise ValueError
 
-            self.body_handles_dict = {k: joint_body_pairs_dict[v] for k, v in joint_handles_dict.items()}
-            self.body_joint_pairs_dict = {v: k for k, v in joint_body_pairs_dict.items()}
+            self.body_handles_dict = dict(zip(body_handle_names, body_names))
+            self.body_joint_pairs_dict = dict(zip(body_names, joint_names))
         else:
             raise ValueError
 
