@@ -22,7 +22,7 @@ class Mujoco(Simulator):
         self.model = self.env.model
         self.data = self.env.data
         self.joint_handles_dict = JointHandlesDict(self)
-        hand_base_name = 'rh_wrist'
+        hand_base_name = self.getHandle('ShadowRobot_base_tip')
         self.hand_base_index = self.model.body_names.index(hand_base_name)
         self.hand_target_position = self.getObjectIndexPosition(self.hand_base_index, -1)
         self.hand_target_orientation = transformations.euler_from_quaternion(  # here euler
@@ -76,6 +76,9 @@ class Mujoco(Simulator):
         idx = self.model.body_names.index(body_name)
         return self.getObjectIndexPosition(idx, parent_handle)
 
+    def getObjectPositionWithReturn(self, handle, parent_handle, mode=None):
+        return [True, self.getObjectPosition(handle, parent_handle, mode=mode)]
+
     def getObjectIndexPosition(self, index, parent_handle, mode=None):
         if mode == vrep.simx_opmode_streaming:
             return None
@@ -86,6 +89,9 @@ class Mujoco(Simulator):
         current_pos = self.data.body_xpos[index].reshape((3, 1))
         return np.dot(transformation_matrix, np.append(current_pos, [1]))[0:3]
 
+    def setObjectPosition(self, handle, base_handle, position_to_set):
+        raise NotImplementedError  # not needed
+
     def getObjectQuaternion(self, handle, **kwargs):
         try:
             if kwargs['parent_handle'] != -1:
@@ -95,6 +101,9 @@ class Mujoco(Simulator):
         idx = self.model.body_names.index(handle)
         return self.data.body_xquat[idx]
 
+    def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
+        raise NotImplementedError  # not needed
+
     def getObjectIndexQuaternion(self, index, **kwargs):
         try:
             if kwargs['parent_handle'] != -1:
@@ -103,17 +112,8 @@ class Mujoco(Simulator):
             pass
         return self.data.body_xquat[index]
 
-    def getObjectPositionWithReturn(self, handle, parent_handle, mode=None):
-        return [True, self.getObjectPosition(handle, parent_handle, mode=mode)]
-
     def setJointTargetVelocity(self, handle, velocity, disable_warning_on_no_connection):
         raise NotImplementedError
-
-    def setObjectPosition(self, handle, base_handle, position_to_set):
-        raise NotImplementedError  # not needed
-
-    def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
-        raise NotImplementedError  # not needed
 
     def setHandTargetPositionAndQuaternion(self, target_position, target_quaternion):
         self.hand_target_position = target_position
@@ -122,11 +122,11 @@ class Mujoco(Simulator):
     def removeObject(self, handle):
         pass
 
-    def getHandTargetPositionAndQuaternion(self):
-        return self.hand_target_position, transformations.quaternion_from_euler(*self.hand_target_orientation)
-
     def createDummy(self, size, color):
         return None
+
+    def getHandTargetPositionAndQuaternion(self):
+        return self.hand_target_position, transformations.quaternion_from_euler(*self.hand_target_orientation)
 
     def getJointIndex(self, body_name):
         return self.model.joint_names.index(self.getBodyJointName(body_name))
