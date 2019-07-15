@@ -145,7 +145,7 @@ class Mujoco(Simulator):
         return np.concatenate((self.hand_target_position, self.hand_target_orientation))
 
     def getNumberOfJoints(self):
-        return self.data.qvel.size
+        return self.data.ctrl.size
 
     def getJointNameVelocity(self, joint_name):
         idx = self.model.joint_names.index(joint_name)

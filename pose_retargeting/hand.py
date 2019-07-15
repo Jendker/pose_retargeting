@@ -290,7 +290,7 @@ class Hand:
                                         constant_values=0)
         for k, v in action_dict.items():
             complete_action_vector[k] = v + self.simulator.getJointIndexPosition(k)  # add position step to current
-        return complete_action_vector[:-6]
+        return complete_action_vector
 
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:
