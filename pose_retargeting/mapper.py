@@ -16,6 +16,12 @@ from pose_retargeting.scaler import Scaler
 from pose_retargeting.simulator.sim_vrep import VRep
 
 
+def slerp(q0, q1, h):
+    theta = np.arccos(np.dot(q0/np.linalg.norm(q0), q1/np.linalg.norm(q1)))
+    sin_theta = np.sin(theta)
+    return np.sin((1-h) * theta) / sin_theta * q0 + np.sin(h * theta)/sin_theta * q1
+
+
 class Mapper:
     def __init__(self, node_name, simulator=None):
         self.last_callback_time = 0  # 0 means no callback yet
@@ -198,7 +204,7 @@ class Mapper:
         last_hand_position, last_hand_quaternion = self.simulator.getHandTargetPositionAndQuaternion()
         new_hand_position = new_hand_position * self.alpha + last_hand_position * (1. - self.alpha)
         q = np.array(q) / np.linalg.norm(q)
-        new_hand_quaternion = q * self.alpha + last_hand_quaternion * (1 - self.alpha)
+        new_hand_quaternion = slerp(last_hand_quaternion, q, self.alpha)
         new_hand_quaternion = new_hand_quaternion / np.linalg.norm(new_hand_quaternion)
         self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
 
