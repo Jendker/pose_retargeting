@@ -161,6 +161,7 @@ class HandPart:
         return self.__setJointsTargetVelocity(self.joint_velocity)
 
     def taskAugmentation(self):
+        # TODO: the same thing as in taskPrioritization to do here
         error = self.__getError()
         self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobian = self.__getPseudoInverseForTaskAugmentation()
@@ -289,7 +290,7 @@ class Hand:
                                         constant_values=0)
         for k, v in action_dict.items():
             complete_action_vector[k] = v + self.simulator.getJointIndexPosition(k)  # add position step to current
-        return complete_action_vector
+        return complete_action_vector[:-6]
 
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:

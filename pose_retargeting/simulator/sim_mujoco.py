@@ -131,6 +131,9 @@ class Mujoco(Simulator):
 
     def getJointIndex(self, body_name):
         return self.model.joint_names.index(self.getBodyJointName(body_name))
+    
+    def getJointNameIndex(self, joint_name):
+        return self.model.joint_names.index(joint_name)
 
     def getBodyJointName(self, body_name):
         return self.joint_handles_dict.getBodyJointName(body_name)
@@ -143,3 +146,10 @@ class Mujoco(Simulator):
 
     def getNumberOfJoints(self):
         return self.data.qvel.size
+
+    def getJointNameVelocity(self, joint_name):
+        idx = self.model.joint_names.index(joint_name)
+        return self.data.qvel[idx]
+
+    def getJointIndexVelocity(self, index):
+        return self.data.qvel[index]
