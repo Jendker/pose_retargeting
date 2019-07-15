@@ -35,9 +35,9 @@ class JacobianCalculationVRep(JacobianCalculation):
     def calculateJacobian(self, configuration_type):
         rospack = rospkg.RosPack()
         try:
-            jacobians_folder_path = rospack.get_path('pose_mapping_vrep') + "/scripts/jacobians/"
+            jacobians_folder_path = rospack.get_path('pose_mapping_vrep') + "/scripts/jacobians/calculated/"
         except:
-            jacobians_folder_path = 'jacobians/'
+            jacobians_folder_path = 'jacobians/calculated/'
         if not os.path.isdir(jacobians_folder_path):
             os.mkdir(jacobians_folder_path)
         jacobian_configuration = self.task_object_handles_and_bases
