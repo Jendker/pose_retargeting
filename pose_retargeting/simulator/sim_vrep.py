@@ -7,6 +7,13 @@ from pose_retargeting.joint_handles_dict import JointHandlesDict
 from pose_retargeting.jacobians.jacobian_calculation_vrep import JacobianCalculationVRep
 
 
+def euclideanTransformation(rotation_matrix, transformation_vector):
+    if len(transformation_vector.shape) < 2:
+        transformation_vector = transformation_vector[:, np.newaxis]
+    top = np.concatenate((rotation_matrix, transformation_vector), axis=1)
+    return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
+
+
 class VRep(Simulator):
     def __init__(self):
         super().__init__()
@@ -33,6 +40,7 @@ class VRep(Simulator):
                                                 mode=vrep.simx_opmode_blocking))  # quaternion
 
         self.errors_in_connection = 0
+        self.shift_translation = np.array([-1.5, 0., 0.25])
 
     def __del__(self):
         rospy.loginfo('Closing connection to remote API server.')
@@ -100,3 +108,6 @@ class VRep(Simulator):
 
     def getJointIndexPosition(self, index):
         return 0  # not needed, just return 0
+
+    def getShiftTransformation(self):
+        return euclideanTransformation(np.identity(3), self.shift_translation)

@@ -54,3 +54,6 @@ class Simulator:
 
     def getJointIndexPosition(self, index):
         raise NotImplementedError
+
+    def getShiftTransformation(self):
+        raise NotImplementedError

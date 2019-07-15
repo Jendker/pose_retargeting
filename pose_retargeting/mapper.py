@@ -24,7 +24,6 @@ class Mapper:
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand')
-        self.shift_translation = np.array([-1.5, 0., 0.25])
 
         self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
         self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
@@ -61,8 +60,9 @@ class Mapper:
     def __returnTransformation(self, data, inverse_transformation_matrix):
         points_return = []
         for point in data.joints_position:
-            vector_transformed = np.dot(inverse_transformation_matrix, np.append(point, [1]))[0:3]\
-                                 + self.shift_translation  # shift to keep hand above surface
+            vector_transformed = np.linalg.multi_dot([self.simulator.getShiftTransformation(),
+                                                      inverse_transformation_matrix, np.append(point, [1])])[0:3]\
+                                 # shift to keep hand in target area
             points_return.append(vector_transformed)
         data_return = data
         data_return.joints_position = points_return
@@ -191,15 +191,16 @@ class Mapper:
         translation = transformation_matrix[0:3, 3]
         inverse_translation = -np.dot(inverse_rotation_matrix, translation)
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
-        q = quaternion_from_matrix(inverse_transformation_matrix)
-        whole_translation = inverse_translation + self.shift_translation  # shift to keep hand above surface
+        shifted_inverse_transformation_matrix = np.dot(self.simulator.getShiftTransformation(),
+                                                       inverse_transformation_matrix)  # shift to keep in target area
+        q = quaternion_from_matrix(shifted_inverse_transformation_matrix)
+        new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
         last_hand_position, last_hand_quaternion = self.simulator.getHandTargetPositionAndQuaternion()
-        new_hand_position = whole_translation * self.alpha + last_hand_position * (1. - self.alpha)
+        new_hand_position = new_hand_position * self.alpha + last_hand_position * (1. - self.alpha)
         q = np.array(q) / np.linalg.norm(q)
         new_hand_quaternion = q * self.alpha + last_hand_quaternion * (1 - self.alpha)
         new_hand_quaternion = new_hand_quaternion / np.linalg.norm(new_hand_quaternion)
         self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
-        return inverse_transformation_matrix
 
     def __transformToCameraLink(self, data):
         target_frame = self.camera_frame_name

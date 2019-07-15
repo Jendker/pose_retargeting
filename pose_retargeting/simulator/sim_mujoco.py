@@ -153,3 +153,6 @@ class Mujoco(Simulator):
 
     def getJointIndexVelocity(self, index):
         return self.data.qvel[index]
+
+    def getShiftTransformation(self):
+        return euclideanTransformation(np.identity(3), np.zeros(3))
