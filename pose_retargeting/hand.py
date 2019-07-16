@@ -281,15 +281,15 @@ class Hand:
         action_dict = {}
         for hand_part in self.hand_parts_list:
             action_dict.update(hand_part.executeControl())  # given as velocities
-        for key, value in action_dict.items():
-            action_dict[key] = value / frequency  # integrate the velocity
+        # for key, value in action_dict.items():
+        #     action_dict[key] = value / frequency * 5  # integrate the velocity
 
         complete_action_vector = self.simulator.getHandBaseAction()
         complete_action_vector = np.pad(complete_action_vector, (0, self.simulator.getNumberOfJoints() -
                                                                  complete_action_vector.size), 'constant',
                                         constant_values=0)
         for k, v in action_dict.items():
-            complete_action_vector[k] = v + self.simulator.getJointIndexPosition(k)  # add position step to current
+            complete_action_vector[k] = v  #+ self.simulator.getJointIndexPosition(k)  # add position step to current
         return complete_action_vector
 
     def newPositionFromHPE(self, new_data):
