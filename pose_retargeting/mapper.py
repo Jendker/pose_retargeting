@@ -22,6 +22,10 @@ def slerp(q0, q1, h):
     return np.sin((1-h) * theta) / sin_theta * q0 + np.sin(h * theta)/sin_theta * q1
 
 
+def lerp(q0, q1, h):
+    return q0 * h + q1 * (1 - h)
+
+
 class Mapper:
     def __init__(self, node_name, simulator=None):
         self.last_callback_time = 0  # 0 means no callback yet
@@ -35,7 +39,7 @@ class Mapper:
         self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
-        self.alpha = 0.2
+        self.alpha = 0.1
         self.simulator = simulator
         if self.simulator is None:
             self.simulator = VRep()
