@@ -23,16 +23,28 @@ class Mujoco(Simulator):
         self.data = self.env.data
         self.env_name = env_name
         self.joint_handles_dict = JointHandlesDict(self)
-        hand_base_name = self.getHandle('ShadowRobot_base_tip')
-        self.hand_base_index = self.model.body_names.index(hand_base_name)
+        self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
+        self.hand_base_index = self.model.body_names.index(self.hand_base_name)
         self.hand_target_position = self.getObjectIndexPosition(self.hand_base_index, -1)
         self.hand_target_orientation = transformations.euler_from_quaternion(  # here euler
             self.getObjectIndexQuaternion(self.hand_base_index))
+        self.scaling_points_knuckles = self.__getKnucklesPositions()
+        self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
+                                           self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.271])]
         # self.handle_index_pairs = handle_index_pairs
 
     # def __get_body_xmat(self, body_name):
     #     idx = self.model.body_names.index(six.b(body_name))
     #     return self.model.data.body_xmat[idx].reshape((3, 3))
+    
+    def __getKnucklesPositions(self):  # only to run at startup, because metacarpal angle may change
+        ret = []
+        knuckles_handles = self.getHandles(['IMCP_side_joint', 'MMCP_side_joint', 'RMCP_side_joint', 'PMCP_side_joint',
+                                            'TMCP_rotation_joint'])
+        for knuckle_handle in knuckles_handles:
+            ret.append(self.getObjectPosition(knuckle_handle, self.hand_base_name))
+        return ret
+        
 
     def __getTransformationMatrixToBase(self):
         rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))

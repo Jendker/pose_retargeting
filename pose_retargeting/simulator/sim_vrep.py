@@ -41,6 +41,11 @@ class VRep(Simulator):
 
         self.errors_in_connection = 0
         self.shift_translation = np.array([-1.5, 0., 0.25])
+        self.scaling_points_knuckles = [np.array([0.033, -.0099, 0.352]), np.array([0.011, -0.0099, .356]),
+                                        np.array([-.011, -.0099, .352]), np.array([-0.033, -.0099, .3436]),
+                                        np.array([0.033, -0.0189, 0.286])]
+        self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
+                                           self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.281])]
 
     def __del__(self):
         rospy.loginfo('Closing connection to remote API server.')

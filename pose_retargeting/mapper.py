@@ -48,7 +48,7 @@ class Mapper:
         self.sampling_time = 0.05
 
         self.FPSCounter = FPSCounter()
-        self.scaler = Scaler()
+        self.scaler = Scaler(self.simulator)
         rospy.loginfo("Pose mapping initialization finished.")
 
     def __euclideanTransformation(self, rotationMatrix, transformationVector):
@@ -158,10 +158,10 @@ class Mapper:
         for index in finger_indices:
             world_points.append(self.__getPositionVectorForDataIndex(data, index))
 
-        vrep_points = [np.array([0.033, -.0099, 0.352]), np.array([0.011, -0.0099, .356]), np.array([-.011, -.0099, .352]),
-                       np.array([-0.011, -0.005, 0.281])]
+        simulator_transformation_hand_points = self.simulator.transformation_hand_points
 
-        transformation_matrix, correct_rotation_matrix = self.__correspondancePointsTransformation(np.array(world_points), np.array(vrep_points))
+        transformation_matrix, correct_rotation_matrix = self.__correspondancePointsTransformation(
+            np.array(world_points), np.array(simulator_transformation_hand_points))
 
         # transform publishing
         t.transform.translation.x = transformation_matrix[0, 3]
