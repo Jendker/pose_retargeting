@@ -51,8 +51,8 @@ class Mapper:
         self.scaler = Scaler(self.simulator)
         rospy.loginfo("Pose mapping initialization finished.")
 
-    def __euclideanTransformation(self, rotationMatrix, transformationVector):
-        top = np.concatenate((rotationMatrix, transformationVector[:, np.newaxis]), axis=1)
+    def __euclideanTransformation(self, rotation_matrix, transformation_vector):
+        top = np.concatenate((rotation_matrix, transformation_vector[:, np.newaxis]), axis=1)
         return np.concatenate((top, np.array([0, 0, 0, 1])[np.newaxis, :]), axis=0)
 
     def __transformDataWithTransform(self, data, transformation_matrix):
