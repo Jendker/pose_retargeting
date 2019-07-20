@@ -18,7 +18,7 @@ class HandPart:
     def __init__(self, list_joint_handles_names, tip_handle_name, task_descriptor_base_handles_and_indices,
                  joints_limits, configuration_type, name, simulator):
         self.initialized = False
-        self.task_prioritization = False
+        self.task_prioritization = True
         self.simulator = simulator
         self.hand_base_handle = self.simulator.getHandle('ShadowRobot_base_tip')
         self.name = name
@@ -64,9 +64,15 @@ class HandPart:
 
         self.joint_velocity = np.zeros(self.DOF_count)
         self.joints_limits = []
-        for joint_limits in joints_limits:
-            max_angle, min_angle = joint_limits
-            self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
+        if self.simulator.type == SimulatorType.MUJOCO:
+            for joint_handle in self.list_joints_handles:
+                self.joints_limits.append(self.simulator.getJointLimits(joint_handle))
+        elif self.simulator.type == SimulatorType.VREP:
+            for joint_limits in joints_limits:
+                max_angle, min_angle = joint_limits
+                self.joints_limits.append([degToRad(max_angle), degToRad(min_angle)])
+        else:
+            raise ValueError
         self.dummy_targets_handles = self.__createTargetDummies()
         self.first_inverse_calculation = True
         self.errors_in_connection = 0
