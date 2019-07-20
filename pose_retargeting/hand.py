@@ -43,10 +43,6 @@ class HandPart:
         else:
             self.K_matrix = np.identity(3 * len(self.task_descriptor_handles)) * 2
         self.weight_matrix_inv = np.identity(self.DOF_count)
-        if self.task_prioritization:
-            self.damping_matrix = np.identity(3) * 0.00001  # for prioritization we use just single error
-        else:
-            self.damping_matrix = np.identity(3 * len(self.task_descriptor_handles)) * 0.00001
 
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
         self.last_human_hand_part_pose = self.simulator.simulationObjectsPose(
@@ -94,6 +90,20 @@ class HandPart:
                                                       [255 * (i % 3), 255 * ((i + 1) % 3), 255 * ((i + 2) % 3), 255])
             dummy_targets.append(dummy_target)
         return dummy_targets
+
+    def __getDampingMatrix(self, jacobian):
+        if not self.task_prioritization:
+            return np.identity(3 * self.tasks_count) * 0.00001
+
+        lambda_max = 0.01
+        epsilon = 0.001
+        _, s, _ = np.linalg.svd(jacobian)
+        smallest_sigma = s[jacobian.shape[0]-1]
+        if smallest_sigma >= epsilon:
+            output_lambda = 0
+        else:
+            output_lambda = (1-(smallest_sigma/epsilon)**2.) * lambda_max
+        return np.identity(3) * output_lambda
 
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(self.DOF_count)
@@ -182,8 +192,9 @@ class HandPart:
         for task_index, _ in enumerate(self.task_descriptor_handles):
             this_jacobian = whole_jacobian[..., task_index * 3:task_index * 3 + 3].T
             jacobians.append(this_jacobian)
+            damping_matrix = self.__getDampingMatrix(this_jacobian)
             this_pseudo_jacobian_inverse = np.linalg.multi_dot([self.weight_matrix_inv, this_jacobian.T, np.linalg.inv(
-                np.linalg.multi_dot([this_jacobian, self.weight_matrix_inv, this_jacobian.T]) + self.damping_matrix)])
+                np.linalg.multi_dot([this_jacobian, self.weight_matrix_inv, this_jacobian.T]) + damping_matrix)])
             pseudo_jacobian_inverses.append(this_pseudo_jacobian_inverse)
         return pseudo_jacobian_inverses, jacobians
 
@@ -194,8 +205,9 @@ class HandPart:
             exit(1)
         jacobian = self.jacobian_calculation.getJacobian()
         jacobian = np.concatenate((jacobian[..., 0:3].T, jacobian[..., 3:6].T), axis=0)
+        damping_matrix = self.__getDampingMatrix(jacobian)
         return np.linalg.multi_dot([self.weight_matrix_inv, jacobian.T, np.linalg.inv(
-            np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + self.damping_matrix)])
+            np.linalg.multi_dot([jacobian, self.weight_matrix_inv, jacobian.T]) + damping_matrix)])
 
     def executeControl(self):
         if self.task_prioritization:

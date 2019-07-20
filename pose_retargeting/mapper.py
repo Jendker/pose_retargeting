@@ -39,7 +39,7 @@ class Mapper:
         self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
-        self.alpha = 0.1
+        self.alpha = 0.2
         self.simulator = simulator
         if self.simulator is None:
             self.simulator = VRep()

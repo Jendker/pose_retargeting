@@ -168,3 +168,8 @@ class Mujoco(Simulator):
 
     def getShiftTransformation(self):
         return euclideanTransformation(np.identity(3), np.zeros(3))
+
+    def getJointLimits(self, body_name):
+        idx = self.getJointIndex(body_name)
+        return self.env.action_space.high[idx], self.env.action_space.low[idx]
+
