@@ -27,6 +27,9 @@ class Mapper:
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand', False)
 
+        self.kf = Kalman()
+        # self.sample_data = SampleData()
+        
         self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
         self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
         self.tf_listener_ = tf.TransformListener()
