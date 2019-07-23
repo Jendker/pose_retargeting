@@ -44,7 +44,7 @@ class Simulator:
         return ret
 
     def getHandTargetPositionAndQuaternion(self):
-        return self.hand_target_position, self.hand_target_orientation
+        raise NotImplementedError
 
     def createDummy(self, size, color):
         raise NotImplementedError

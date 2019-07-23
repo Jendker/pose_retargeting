@@ -5,6 +5,7 @@ import rospy
 import time
 from pose_retargeting.joint_handles_dict import JointHandlesDict
 from pose_retargeting.jacobians.jacobian_calculation_vrep import JacobianCalculationVRep
+import pose_retargeting.rotations_vrep as rotations
 
 
 def euclideanTransformation(rotation_matrix, transformation_vector):
@@ -88,6 +89,9 @@ class VRep(Simulator):
         self.setObjectPosition(self.hand_base_target_handle, -1, target_position.tolist())
         self.setObjectQuaternion(self.hand_base_target_handle, -1, target_quaternion.tolist())
 
+    def getHandTargetPositionAndQuaternion(self):
+        return self.hand_target_position, self.hand_target_orientation
+
     def removeObject(self, handle):
         vrep.simxRemoveObject(self.clientID, handle, vrep.simx_opmode_blocking)
 
@@ -116,3 +120,15 @@ class VRep(Simulator):
 
     def getShiftTransformation(self):
         return euclideanTransformation(np.identity(3), self.shift_translation)
+
+    @staticmethod
+    def quat2euler(quat):
+        return rotations.euler_from_quaternion(quat)
+
+    @staticmethod
+    def euler2quat(euler):
+        return rotations.quaternion_from_euler(*euler)
+
+    @staticmethod
+    def mat2quat(matrix):
+        return rotations.quaternion_from_matrix(matrix)

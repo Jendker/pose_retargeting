@@ -9,7 +9,7 @@ from geometry_msgs.msg import Point
 from sensor_msgs.msg import PointCloud
 from visualization_msgs.msg import MarkerArray, Marker
 import geometry_msgs.msg
-from pose_retargeting.transformations import quaternion_from_matrix
+from pose_retargeting.rotations_vrep import quaternion_from_matrix
 from pose_retargeting.hand import Hand
 from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
@@ -168,7 +168,7 @@ class Mapper:
         t.transform.translation.y = transformation_matrix[1, 3]
         t.transform.translation.z = transformation_matrix[2, 3]
 
-        q = quaternion_from_matrix(correct_rotation_matrix)
+        q = quaternion_from_matrix(correct_rotation_matrix)  # here we need to keep rotations_vrep, which comes from ROS
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
@@ -203,7 +203,7 @@ class Mapper:
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
         shifted_inverse_transformation_matrix = np.dot(self.simulator.getShiftTransformation(),
                                                        inverse_transformation_matrix)  # shift to keep in target area
-        q = quaternion_from_matrix(shifted_inverse_transformation_matrix)
+        q = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
         new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
         last_hand_position, last_hand_quaternion = self.simulator.getHandTargetPositionAndQuaternion()
         new_hand_position = new_hand_position * self.alpha + last_hand_position * (1. - self.alpha)

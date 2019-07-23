@@ -1,7 +1,7 @@
 from pose_retargeting.simulator.simulator import Simulator, SimulatorType
 import pose_retargeting.vrep as vrep
 import numpy as np
-import pose_retargeting.transformations as transformations
+import pose_retargeting.rotations_mujoco as rotations
 from pose_retargeting.joint_handles_dict import JointHandlesDict
 from pose_retargeting.jacobians.jacobian_calculation_mujoco import JacobianCalculationMujoco
 
@@ -26,7 +26,7 @@ class Mujoco(Simulator):
         self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
         self.hand_base_index = self.model.body_names.index(self.hand_base_name)
         self.hand_target_position = self.getObjectIndexPosition(self.hand_base_index, -1)
-        self.hand_target_orientation = transformations.euler_from_quaternion(  # here euler
+        self.hand_target_orientation = self.quat2euler(  # here euler because we set action as euler
             self.getObjectIndexQuaternion(self.hand_base_index))
         self.scaling_points_knuckles = self.__getKnucklesPositions()
         self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
@@ -44,7 +44,6 @@ class Mujoco(Simulator):
         for knuckle_handle in knuckles_handles:
             ret.append(self.getObjectPosition(knuckle_handle, self.hand_base_name))
         return ret
-        
 
     def __getTransformationMatrixToBase(self):
         rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
@@ -56,6 +55,20 @@ class Mujoco(Simulator):
         rotation_matrix = self.data.body_xmat[idx].reshape((3, 3))
         translation = self.data.body_xpos[idx].reshape((3, 1))
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
+
+    @staticmethod
+    def quat2euler(quat):
+        return rotations.quat2euler(quat)
+
+    @staticmethod
+    def euler2quat(euler):
+        return rotations.euler2quat(euler)
+
+    @staticmethod
+    def mat2quat(matrix):
+        if matrix.shape == (4, 4):
+            matrix = matrix[:3, :3]
+        return rotations.mat2quat(matrix)
     
     def jacobianCalculation(self, *argv, **kwargs):
         return JacobianCalculationMujoco(*argv, **kwargs)
@@ -130,16 +143,16 @@ class Mujoco(Simulator):
 
     def setHandTargetPositionAndQuaternion(self, target_position, target_quaternion):
         self.hand_target_position = target_position
-        self.hand_target_orientation = transformations.euler_from_quaternion(target_quaternion)
+        self.hand_target_orientation = self.quat2euler(target_quaternion)
+
+    def getHandTargetPositionAndQuaternion(self):
+        return self.hand_target_position, self.euler2quat(self.hand_target_orientation)
 
     def removeObject(self, handle):
         pass
 
     def createDummy(self, size, color):
         return None
-
-    def getHandTargetPositionAndQuaternion(self):
-        return self.hand_target_position, transformations.quaternion_from_euler(*self.hand_target_orientation)
 
     def getJointIndex(self, body_name):
         return self.model.joint_names.index(self.getBodyJointName(body_name))
