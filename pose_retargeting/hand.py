@@ -225,20 +225,19 @@ class HandPart:
         else:
             raise ValueError
 
-    def newPositionFromHPE(self, new_data, alpha):
+    def newPositionFromHPE(self, new_data):
         current_time = time.time()
         hand_part_poses = []
         for index in self.task_descriptor_equivalent_hpe_indices:
             hand_part_poses.append(new_data.joints_position[index])
-        HPE_hand_part_poses = np.concatenate(hand_part_poses)
-        temp_new_HPE_hand_pose = HPE_hand_part_poses * alpha + self.last_human_hand_part_pose * (1 - alpha)
+        new_HPE_hand_pose = np.concatenate(hand_part_poses)
         if self.last_callback_time != 0:  # TODO: maybe here we can make better with calculating with first iteration
-            self.human_hand_vel = (temp_new_HPE_hand_pose - self.last_human_hand_part_pose) / (
+            self.human_hand_vel = (new_HPE_hand_pose - self.last_human_hand_part_pose) / (
                     current_time - self.last_callback_time)
             self.last_callback_time = current_time
         else:
             self.last_callback_time = current_time
-        self.last_human_hand_part_pose = temp_new_HPE_hand_pose
+        self.last_human_hand_part_pose = new_HPE_hand_pose
         self.__updateTargetDummiesPoses()
 
     def getName(self):
@@ -249,7 +248,7 @@ class HandPart:
 
 
 class Hand:
-    def __init__(self, alpha, simulator):
+    def __init__(self, simulator):
         self.simulator = simulator
 
         index_finger = HandPart(['IMCP_side_joint', 'IMCP_front_joint', 'IPIP_joint', 'IDIP_joint'],
@@ -279,7 +278,6 @@ class Hand:
                                 [[60., -60.], [70., 0.], [30., -30.], [12., -12.], [90, 0]], ConfigurationType.thumb,
                                 'thumb', self.simulator)
 
-        self.alpha = alpha
         self.hand_parts_list = (index_finger, middle_finger, ring_finger, pinkie_finger, thumb_finger)
         self.error_calculation = ErrorCalculation(list(self.hand_parts_list),
                                                   [['IPIP_joint', 'IDIP_joint', 'ITIP_tip'],
@@ -288,7 +286,7 @@ class Hand:
                                                    ['PPIP_joint', 'PDIP_joint', 'PTIP_tip'],
                                                    ['TPIP_front_joint', 'TDIP_joint', 'TTIP_tip']],
                                                   [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
-                                                   [6, 7, 8]], 10, alpha, self.simulator)
+                                                   [6, 7, 8]], 10, self.simulator)
 
     def controlOnce(self):
         for hand_part in self.hand_parts_list:
@@ -312,5 +310,5 @@ class Hand:
 
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:
-            hand_part.newPositionFromHPE(new_data, self.alpha)
+            hand_part.newPositionFromHPE(new_data)
         self.error_calculation.newPositionFromHPE(new_data)

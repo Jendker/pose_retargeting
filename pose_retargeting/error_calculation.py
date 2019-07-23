@@ -10,9 +10,8 @@ import os
 
 class ErrorCalculation:
     def __init__(self, hand_parts, joint_handle_names_for_errors, indices_of_joints_from_hpe,
-                 frequency, alpha, simulator):
+                 frequency, simulator):
         self.simulator = simulator
-        self.alpha = alpha
         self.indices_of_joints_from_hpe = indices_of_joints_from_hpe
         self.running = False
         self.hand_parts = hand_parts
@@ -75,9 +74,7 @@ class ErrorCalculation:
             hand_part_poses = []
             for index in indices_group:
                 hand_part_poses.append(new_data.joints_position[index])
-            HPE_hand_part_poses = np.concatenate(hand_part_poses)
-            self.last_human_hand_pose[hand_part_index] = HPE_hand_part_poses * self.alpha + self.last_human_hand_pose[
-                hand_part_index] * (1 - self.alpha)
+            self.last_human_hand_pose[hand_part_index] = np.concatenate(hand_part_poses)
         self.last_hpe_update = time.time()
         if not self.running:
             self.running = True

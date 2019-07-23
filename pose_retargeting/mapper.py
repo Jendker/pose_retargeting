@@ -14,22 +14,14 @@ from pose_retargeting.hand import Hand
 from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
 from pose_retargeting.simulator.sim_vrep import VRep
-
-
-def slerp(q0, q1, h):
-    theta = np.arccos(np.dot(q0/np.linalg.norm(q0), q1/np.linalg.norm(q1)))
-    sin_theta = np.sin(theta)
-    return np.sin((1-h) * theta) / sin_theta * q0 + np.sin(h * theta)/sin_theta * q1
-
-
-def lerp(q0, q1, h):
-    return q0 * h + q1 * (1 - h)
+import pose_retargeting.filtering.linear as filtering
 
 
 class Mapper:
     def __init__(self, node_name, simulator=None):
         self.last_callback_time = 0  # 0 means no callback yet
         self.last_data = []
+        self.last_flattened_hand_data = None
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
@@ -44,7 +36,7 @@ class Mapper:
         if self.simulator is None:
             self.simulator = VRep()
 
-        self.hand = Hand(self.alpha, self.simulator)
+        self.hand = Hand(self.simulator)
         self.sampling_time = 0.05
 
         self.FPSCounter = FPSCounter()
@@ -203,13 +195,8 @@ class Mapper:
         inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
         shifted_inverse_transformation_matrix = np.dot(self.simulator.getShiftTransformation(),
                                                        inverse_transformation_matrix)  # shift to keep in target area
-        q = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
+        new_hand_quaternion = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
         new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
-        last_hand_position, last_hand_quaternion = self.simulator.getHandTargetPositionAndQuaternion()
-        new_hand_position = new_hand_position * self.alpha + last_hand_position * (1. - self.alpha)
-        q = np.array(q) / np.linalg.norm(q)
-        new_hand_quaternion = slerp(last_hand_quaternion, q, self.alpha)
-        new_hand_quaternion = new_hand_quaternion / np.linalg.norm(new_hand_quaternion)
         self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
 
     def __transformToCameraLink(self, data):
@@ -236,6 +223,11 @@ class Mapper:
         if self.using_left_hand:
             data = self.__mirrorData(data)
         data = self.__transformToCameraLink(data)
+        if self.last_flattened_hand_data is None:
+            self.last_flattened_hand_data = filtering.flattenHandPoints(data)
+        else:
+            data, self.last_flattened_hand_data = filtering.lerp_hand_data(data, self.last_flattened_hand_data,
+                                                                           self.alpha)
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         # self.__publishMarkers(data)  # to visualize results
@@ -243,7 +235,6 @@ class Mapper:
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
         self.__setHandPosition(transformation_matrix)
         self.last_data = data
-
         self.hand.newPositionFromHPE(self.last_data)
 
     def getControlOnce(self):
