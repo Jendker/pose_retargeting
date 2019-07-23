@@ -19,5 +19,6 @@ catkin build
 # catkin build --cmake-args -DPYTHON_EXECUTABLE:FILEPATH=/path/to/virtualenv/python
 source devel/setup.bash
 ```
+(source https://github.com/ros/geometry2/issues/259)
 
 
