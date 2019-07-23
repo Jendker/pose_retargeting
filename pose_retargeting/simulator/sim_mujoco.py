@@ -22,21 +22,20 @@ class Mujoco(Simulator):
         self.model = self.env.model
         self.data = self.env.data
         self.env_name = env_name
+
+        self.translate_hand_position = np.array([-1.2, 0, 0])
+        self.limits_hand_orientation = ((-3.14, 3.14), (-4.71, 1.57), (-4.71, 1.57))
+
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
         self.hand_base_index = self.model.body_names.index(self.hand_base_name)
-        self.hand_target_position = self.getObjectIndexPosition(self.hand_base_index, -1)
+        self.hand_target_position = self.getObjectIndexPosition(self.hand_base_index, -1) - self.translate_hand_position
         self.hand_target_orientation = self.quat2euler(  # here euler because we set action as euler
             self.getObjectIndexQuaternion(self.hand_base_index))
         self.scaling_points_knuckles = self.__getKnucklesPositions()
         self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
                                            self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.271])]
-        # self.handle_index_pairs = handle_index_pairs
 
-    # def __get_body_xmat(self, body_name):
-    #     idx = self.model.body_names.index(six.b(body_name))
-    #     return self.model.data.body_xmat[idx].reshape((3, 3))
-    
     def __getKnucklesPositions(self):  # only to run at startup, because metacarpal angle may change
         ret = []
         knuckles_handles = self.getHandles(['IMCP_side_joint', 'MMCP_side_joint', 'RMCP_side_joint', 'PMCP_side_joint',
@@ -166,8 +165,27 @@ class Mujoco(Simulator):
     def getJacobianFromBodyName(self, body_name):
         return self.data.get_body_jacp(body_name).reshape(3, -1)
 
+    def applyLimitsOfOrientation(self, old_angles):
+        new_angles = old_angles.copy()
+        for i in range(0, 3):
+            if new_angles[i] < self.limits_hand_orientation[i][0]:
+                new_angles[i] += 3.1416 * 2
+            elif new_angles[i] > self.limits_hand_orientation[i][1]:
+                new_angles[i] -= 3.1416 * 2
+        return new_angles
+
+    def updateHandPosition(self, old_position):
+        return old_position + self.translate_hand_position
+
+    @staticmethod
+    def inverseUpdateHandPosition(old_position):
+        new_position = old_position.copy()
+        new_position[0] += 1.2
+        return new_position
+
     def getHandBaseAction(self):
-        return np.concatenate((self.hand_target_position, self.hand_target_orientation))
+        return np.concatenate((self.updateHandPosition(self.hand_target_position),
+                               self.applyLimitsOfOrientation(self.hand_target_orientation)))
 
     def getNumberOfJoints(self):
         return self.data.ctrl.size
@@ -185,4 +203,3 @@ class Mujoco(Simulator):
     def getJointLimits(self, body_name):
         idx = self.getJointIndex(body_name)
         return self.env.action_space.high[idx], self.env.action_space.low[idx]
-
