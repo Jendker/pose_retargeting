@@ -4,6 +4,10 @@ import numpy as np
 import pose_retargeting.rotations_mujoco as rotations
 from pose_retargeting.joint_handles_dict import JointHandlesDict
 from pose_retargeting.jacobians.jacobian_calculation_mujoco import JacobianCalculationMujoco
+import sched
+import time
+import threading
+from mujoco_py import const
 
 
 def euclideanTransformation(rotation_matrix, transformation_vector):
@@ -35,6 +39,16 @@ class Mujoco(Simulator):
         self.scaling_points_knuckles = self.__getKnucklesPositions()
         self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
                                            self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.271])]
+        self.scheduler = sched.scheduler(time.time, time.sleep)
+        setup_viewer_thread = threading.Thread(target=self.__setupViewer)
+        setup_viewer_thread.start()
+
+    def __setupViewer(self):
+        try:
+            self.viewer = self.env.viewer
+        except AttributeError:
+            self.scheduler.enter(0.1, 1, self.__setupViewer)
+            self.scheduler.run()
 
     def __getKnucklesPositions(self):  # only to run at startup, because metacarpal angle may change
         ret = []
@@ -184,6 +198,13 @@ class Mujoco(Simulator):
         return new_position
 
     def getHandBaseAction(self):
+        try:
+            t = time.time()
+            x, y = np.cos(t), np.sin(t)
+            self.viewer.add_marker(pos=np.array([x, y, 1]),
+                                   label=str(t), type=const.GEOM_SPHERE, rgba=np.array([0, 1, 1, 1]))
+        except AttributeError:
+            pass
         return np.concatenate((self.updateHandPosition(self.hand_target_position),
                                self.applyLimitsOfOrientation(self.hand_target_orientation)))
 
