@@ -23,7 +23,7 @@ class Mujoco(Simulator):
         self.data = self.env.data
         self.env_name = env_name
 
-        self.translate_hand_position = np.array([-1.2, 0, 0])
+        self.translate_hand_position = np.array([-0.8, 0, 0])
         self.limits_hand_orientation = ((-3.14, 3.14), (-4.71, 1.57), (-4.71, 1.57))
 
         self.joint_handles_dict = JointHandlesDict(self)
