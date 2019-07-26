@@ -1,8 +1,8 @@
 # pose_mapping
 
-### Python3 compatibility
+### Compile catkin with Python 3 compatibility
 
-To use Python3 with ROS Kinetic or newer:
+This package works with Python 3. To use it with ROS Kinetic or newer:
 
 ```
 cd ~/catkin_ws
