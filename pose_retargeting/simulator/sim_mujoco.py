@@ -58,12 +58,14 @@ class Mujoco(Simulator):
             ret.append(self.getObjectPosition(knuckle_handle, self.hand_base_name))
         return ret
 
-    def __getTransformationMatrixToBase(self):
+    def __getInverseTransformationMatrixToBase(self):
+        """Returns transformation from world to hand base coordinate system"""
         rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
         translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
 
-    def __getTransformationMatrixToBaseNotInverse(self):
+    def __getTransformationMatrixToBase(self):
+        """Returns transformation from hand base coordinate system to world coordinate system"""
         rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
         translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
         return euclideanTransformation(rotation_matrix, translation)
@@ -92,14 +94,20 @@ class Mujoco(Simulator):
         return JacobianCalculationMujoco(*argv, **kwargs)
 
     def simulationObjectsPose(self, body_names, mode=vrep.simx_opmode_buffer):
+        """
+        Returns pose in hand base coordinate system
+        :param body_names:
+        :param mode: defined for backward compability with VRep
+        :return:
+        """
         if mode != vrep.simx_opmode_buffer and mode != vrep.simx_opmode_blocking:
             return
         current_pos = []
-        transformation_matrix = self.__getTransformationMatrixToBase()
+        inverse_transformation_matrix = self.__getInverseTransformationMatrixToBase()
         for body_name in body_names:
             idx = self.model.body_names.index(body_name)
             this_current_pos = self.data.body_xpos[idx].reshape((3, 1))
-            current_pos.extend(np.dot(transformation_matrix, np.append(this_current_pos, [1]))[0:3])
+            current_pos.extend(np.dot(inverse_transformation_matrix, np.append(this_current_pos, [1]))[0:3])
         return np.array(current_pos)
 
     def getJointPosition(self, body_name, mode=vrep.simx_opmode_buffer):
@@ -227,7 +235,7 @@ class Mujoco(Simulator):
         return np.dot(transformation_matrix, np.append(point, [1]))[0:3]
 
     def visualisePose(self, poses):
-        transformation_matrix = self.__getTransformationMatrixToBaseNotInverse()
+        transformation_matrix = self.__getTransformationMatrixToBase()
         try:
             for i, pose in enumerate(poses):
 
