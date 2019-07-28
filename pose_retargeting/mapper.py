@@ -25,7 +25,7 @@ class Mapper:
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
-        self.using_left_hand = rospy.get_param('transformation/left_hand')
+        self.using_left_hand = rospy.get_param('transformation/left_hand', False)
 
         self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
         self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
