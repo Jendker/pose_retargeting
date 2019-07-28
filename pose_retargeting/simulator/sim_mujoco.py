@@ -63,6 +63,11 @@ class Mujoco(Simulator):
         translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
 
+    def __getTransformationMatrixToBaseNotInverse(self):
+        rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
+        translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
+        return euclideanTransformation(rotation_matrix, translation)
+
     def __getTransformationMatrix(self, handle):
         idx = self.model.body_names.index(handle)
         rotation_matrix = self.data.body_xmat[idx].reshape((3, 3))
@@ -198,13 +203,6 @@ class Mujoco(Simulator):
         return new_position
 
     def getHandBaseAction(self):
-        try:
-            t = time.time()
-            x, y = np.cos(t), np.sin(t)
-            self.viewer.add_marker(pos=np.array([x, y, 1]),
-                                   label=str(t), type=const.GEOM_SPHERE, rgba=np.array([0, 1, 1, 1]))
-        except AttributeError:
-            pass
         return np.concatenate((self.updateHandPosition(self.hand_target_position),
                                self.applyLimitsOfOrientation(self.hand_target_orientation)))
 
@@ -224,3 +222,17 @@ class Mujoco(Simulator):
     def getJointLimits(self, body_name):
         idx = self.getJointIndex(body_name)
         return self.env.action_space.high[idx], self.env.action_space.low[idx]
+
+    def __transformPoint(self, point, transformation_matrix):
+        return np.dot(transformation_matrix, np.append(point, [1]))[0:3]
+
+    def visualisePose(self, poses):
+        transformation_matrix = self.__getTransformationMatrixToBaseNotInverse()
+        try:
+            for i, pose in enumerate(poses):
+
+                self.viewer.add_marker(pos=self.__transformPoint(pose, transformation_matrix), type=const.GEOM_SPHERE,
+                                       size=np.ones(3) * 0.008, label='',
+                                       rgba=np.array([1 * (i % 3), 1 * ((i + 1) % 3), 1 * ((i + 2) % 3), 0.6]))
+        except (AttributeError, TypeError):
+            pass

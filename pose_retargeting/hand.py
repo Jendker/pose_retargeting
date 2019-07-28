@@ -74,6 +74,7 @@ class HandPart:
         self.errors_in_connection = 0
         self.last_callback_time = 0  # 0 means no callback yet
         self.initialized = True
+        self.visualisation_last_poses = None
 
     def __del__(self):
         zero_velocities = np.zeros(np.shape(self.list_joints_handles))
@@ -129,13 +130,18 @@ class HandPart:
 
     def __updateTargetDummiesPoses(self):
         if self.simulator.type != SimulatorType.VREP:
-            return
-        last_pose = self.last_human_hand_part_pose.copy()
+            all_poses = []
         for index, dummy_handle in enumerate(self.dummy_targets_handles):
             start_index = index * 3
             end_index = start_index + 3
-            dummy_position_list = last_pose[start_index:end_index].tolist()
-            self.simulator.setObjectPosition(dummy_handle, self.hand_base_handle, dummy_position_list)
+            dummy_position = self.last_human_hand_part_pose[start_index:end_index]
+            if self.simulator.type == SimulatorType.VREP:
+                self.simulator.setObjectPosition(dummy_handle, self.hand_base_handle, dummy_position.tolist())
+            else:
+                all_poses.append(dummy_position)
+        if self.simulator.type != SimulatorType.VREP:
+            self.__updateVisualisationPoses(all_poses)
+
 
     def __setJointsTargetVelocity(self, joints_velocities):
         if self.simulator.type == SimulatorType.MUJOCO:
@@ -155,6 +161,9 @@ class HandPart:
         else:
             current_pose = self.simulator.simulationObjectsPose([self.task_descriptor_handles[index]])
             return self.last_human_hand_part_pose[index * 3:index * 3 + 3] - current_pose
+
+    def __updateVisualisationPoses(self, new_poses):
+        self.visualisation_last_poses = new_poses
 
     def getAllTaskDescriptorsErrors(self):
         error = 0.
@@ -218,6 +227,7 @@ class HandPart:
         if self.simulator.type == SimulatorType.VREP:
             return None
         elif self.simulator.type == SimulatorType.MUJOCO:
+            self.simulator.visualisePose(self.visualisation_last_poses)
             joint_velocity_dict = {}
             for index, velocity in enumerate(joints_velocities):
                 joint_velocity_dict[self.simulator.getJointIndex(self.list_joints_handles[index])] = velocity
