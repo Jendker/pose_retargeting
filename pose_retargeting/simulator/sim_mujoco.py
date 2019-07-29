@@ -70,7 +70,7 @@ class Mujoco(Simulator):
         translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
         return euclideanTransformation(rotation_matrix, translation)
 
-    def __getTransformationMatrix(self, handle):
+    def __getInverseTransformationMatrix(self, handle):
         idx = self.model.body_names.index(handle)
         rotation_matrix = self.data.body_xmat[idx].reshape((3, 3))
         translation = self.data.body_xpos[idx].reshape((3, 1))
@@ -135,7 +135,7 @@ class Mujoco(Simulator):
         if mode == vrep.simx_opmode_streaming:
             return None
         if parent_handle != -1:
-            transformation_matrix = self.__getTransformationMatrix(parent_handle)
+            transformation_matrix = self.__getInverseTransformationMatrix(parent_handle)
         else:
             transformation_matrix = np.identity(4)
         current_pos = self.data.body_xpos[index].reshape((3, 1))
