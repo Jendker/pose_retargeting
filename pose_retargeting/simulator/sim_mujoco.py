@@ -134,12 +134,12 @@ class Mujoco(Simulator):
     def getObjectIndexPosition(self, index, parent_handle, mode=None):
         if mode == vrep.simx_opmode_streaming:
             return None
-        if parent_handle != -1:
-            transformation_matrix = self.__getInverseTransformationMatrix(parent_handle)
+        current_pos = self.data.body_xpos[index]
+        if parent_handle == -1:
+            return current_pos
         else:
-            transformation_matrix = np.identity(4)
-        current_pos = self.data.body_xpos[index].reshape((3, 1))
-        return np.dot(transformation_matrix, np.append(current_pos, [1]))[0:3]
+            transformation_matrix = self.__getInverseTransformationMatrix(parent_handle)
+            return np.dot(transformation_matrix, np.append(current_pos, [1]))[0:3]
 
     def setObjectPosition(self, handle, base_handle, position_to_set):
         raise NotImplementedError  # not needed
