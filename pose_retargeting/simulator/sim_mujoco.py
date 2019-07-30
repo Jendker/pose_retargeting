@@ -61,19 +61,19 @@ class Mujoco(Simulator):
     def __getInverseTransformationMatrixToBase(self):
         """Returns transformation from world to hand base coordinate system"""
         rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
-        translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
+        translation = self.data.body_xpos[self.hand_base_index]
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
 
-    def __getTransformationMatrixToBase(self):
+    def getTransformationMatrixToBase(self):
         """Returns transformation from hand base coordinate system to world coordinate system"""
         rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
-        translation = self.data.body_xpos[self.hand_base_index].reshape((3, 1))
+        translation = self.data.body_xpos[self.hand_base_index]
         return euclideanTransformation(rotation_matrix, translation)
 
     def __getInverseTransformationMatrix(self, handle):
         idx = self.model.body_names.index(handle)
         rotation_matrix = self.data.body_xmat[idx].reshape((3, 3))
-        translation = self.data.body_xpos[idx].reshape((3, 1))
+        translation = self.data.body_xpos[idx]
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
 
     @staticmethod
@@ -106,7 +106,7 @@ class Mujoco(Simulator):
         inverse_transformation_matrix = self.__getInverseTransformationMatrixToBase()
         for body_name in body_names:
             idx = self.model.body_names.index(body_name)
-            this_current_pos = self.data.body_xpos[idx].reshape((3, 1))
+            this_current_pos = self.data.body_xpos[idx]
             current_pos.extend(np.dot(inverse_transformation_matrix, np.append(this_current_pos, [1]))[0:3])
         return np.array(current_pos)
 
@@ -231,11 +231,12 @@ class Mujoco(Simulator):
         idx = self.getJointIndex(body_name)
         return self.env.action_space.high[idx], self.env.action_space.low[idx]
 
-    def __transformPoint(self, point, transformation_matrix):
+    @staticmethod
+    def __transformPoint(point, transformation_matrix):
         return np.dot(transformation_matrix, np.append(point, [1]))[0:3]
 
     def visualisePose(self, poses):
-        transformation_matrix = self.__getTransformationMatrixToBase()
+        transformation_matrix = self.getTransformationMatrixToBase()
         try:
             for i, pose in enumerate(poses):
 
