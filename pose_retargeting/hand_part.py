@@ -72,7 +72,7 @@ class HandPart:
         self.errors_in_connection = 0
         self.last_callback_time = 0  # 0 means no callback yet
         self.initialized = True
-        self.visualisation_last_poses = None
+        self.visualisation_last_poses = self.last_human_hand_part_pose.reshape(2, 3)
 
     def __del__(self):
         zero_velocities = np.zeros(np.shape(self.list_joints_handles))
@@ -97,11 +97,11 @@ class HandPart:
         lambda_max = 0.01
         epsilon = 0.001
         _, s, _ = np.linalg.svd(jacobian)
-        smallest_sigma = s[jacobian.shape[0]-1]
+        smallest_sigma = s[jacobian.shape[0] - 1]
         if smallest_sigma >= epsilon:
             output_lambda = 0
         else:
-            output_lambda = (1-(smallest_sigma/epsilon)**2.) * lambda_max
+            output_lambda = (1 - (smallest_sigma / epsilon) ** 2.) * lambda_max
         return np.identity(3) * output_lambda
 
     def __updateWeightMatrixInverse(self):
@@ -140,7 +140,6 @@ class HandPart:
         if self.simulator.type != SimulatorType.VREP:
             self.__updateVisualisationPoses(all_poses)
 
-
     def __setJointsTargetVelocity(self, joints_velocities):
         if self.simulator.type == SimulatorType.MUJOCO:
             return joints_velocities
@@ -174,10 +173,12 @@ class HandPart:
         pseudo_inverse_jacobians, jacobians = self.__getPseudoInverseForTaskPrioritization()
         q_vel = np.zeros(self.DOF_count)
         multiplier = np.identity(self.DOF_count)
+        rotation_matrix = self.simulator.getTransformationMatrixToBase()[0:3, 0:3]
         for index, task_handle in enumerate(self.task_descriptor_handles):
             error = self.__getError(index)
             q_vel = q_vel + np.dot(np.dot(multiplier, pseudo_inverse_jacobians[index]),
-                                   (self.human_hand_vel[index * 3:index * 3 + 3] + np.dot(self.K_matrix, error)))
+                                   rotation_matrix @ (self.human_hand_vel[index * 3:index * 3 + 3]
+                                                      + np.dot(self.K_matrix, error)))
             multiplier = np.dot(multiplier,
                                 np.identity(self.DOF_count) - np.dot(pseudo_inverse_jacobians[index], jacobians[index]))
         self.joint_velocity = q_vel
