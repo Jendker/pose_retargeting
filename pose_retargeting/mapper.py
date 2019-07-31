@@ -15,6 +15,7 @@ from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
 from pose_retargeting.simulator.sim_vrep import VRep
 import pose_retargeting.filtering.linear as filtering
+from pose_retargeting.filtering.kalman import Kalman
 
 
 class Mapper:
