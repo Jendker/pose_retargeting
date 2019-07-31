@@ -227,11 +227,12 @@ class Mapper:
         if self.using_left_hand:
             data = self.__mirrorData(data)
         data = self.__transformToCameraLink(data)
-        if self.last_flattened_hand_data is None:
-            self.last_flattened_hand_data = filtering.flattenHandPoints(data)
-        else:
-            data, self.last_flattened_hand_data = filtering.lerp_hand_data(data, self.last_flattened_hand_data,
-                                                                           self.alpha)
+        # if self.last_flattened_hand_data is None:
+        #     self.last_flattened_hand_data = filtering.flattenHandPoints(data)
+        # else:
+        #     data, self.last_flattened_hand_data = filtering.lerp_hand_data(data, self.last_flattened_hand_data,
+        #                                                                    self.alpha)
+        data = self.kf.filter(data)
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         # self.__publishMarkers(data)  # to visualize results
