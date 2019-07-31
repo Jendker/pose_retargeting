@@ -14,28 +14,23 @@ from pose_retargeting.hand import Hand
 from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
 from pose_retargeting.simulator.sim_vrep import VRep
-import pose_retargeting.filtering.linear as filtering
 from pose_retargeting.filtering.kalman import Kalman
 
 
 class Mapper:
     def __init__(self, node_name, simulator=None):
         self.last_callback_time = 0  # 0 means no callback yet
-        self.last_data = []
-        self.last_flattened_hand_data = None
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
         self.using_left_hand = rospy.get_param('transformation/left_hand', False)
 
-        self.kf = Kalman()
-        # self.sample_data = SampleData()
-        
+        self.data_filtering = Kalman()
+
         self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
         self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
         self.tf_listener_ = tf.TransformListener()
         self.errors_in_connection = 0
-        self.alpha = 0.2
         self.simulator = simulator
         if self.simulator is None:
             self.simulator = VRep()
@@ -227,20 +222,15 @@ class Mapper:
         if self.using_left_hand:
             data = self.__mirrorData(data)
         data = self.__transformToCameraLink(data)
-        # if self.last_flattened_hand_data is None:
-        #     self.last_flattened_hand_data = filtering.flattenHandPoints(data)
-        # else:
-        #     data, self.last_flattened_hand_data = filtering.lerp_hand_data(data, self.last_flattened_hand_data,
-        #                                                                    self.alpha)
-        data = self.kf.filter(data)
+        data = self.data_filtering.filter(data)
+
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         # self.__publishMarkers(data)  # to visualize results
         # self.publishNewPointCloud(data)  # to visualize results
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
         self.__setHandPosition(transformation_matrix)
-        self.last_data = data
-        self.hand.newPositionFromHPE(self.last_data)
+        self.hand.newPositionFromHPE(data)
 
     def getControlOnce(self):
         frequency = self.FPSCounter.getAndPrintFPS()

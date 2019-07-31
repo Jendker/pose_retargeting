@@ -1,22 +1,5 @@
 import numpy as np
-from geometry_msgs.msg import Point
-
-
-def flattenHandPoints(data):
-    flattened_data = []
-    for joint_point in data.joints_position:
-        flattened_data.extend([joint_point.x, joint_point.y, joint_point.z])
-    return tuple(flattened_data)
-
-
-def packHandPoints(data, flattened_data):
-    for i in range(0, 21):
-        point = Point()
-        point.x = flattened_data[i * 3]
-        point.y = flattened_data[i * 3 + 1]
-        point.z = flattened_data[i * 3 + 2]
-        data.joints_position[i] = point
-    return data
+from pose_retargeting.filtering.utils import packHandPoints, flattenHandPoints
 
 
 def slerp(q0, q1, h):
@@ -29,16 +12,27 @@ def lerp(q0, q1, h):
     return q0 * h + q1 * (1 - h)
 
 
-def lerp_data(q0, q1, h):
-    ret = []
-    new_q0 = np.copy(q0)
-    new_q1 = np.copy(q1)
-    for q0, q1 in zip(new_q0, new_q1):
-        ret.append(q0 * h + q1 * (1 - h))
-    return np.array(ret)
+class LinearHandFiltering:
+    def __init__(self, alpha=0.2):
+        self.alpha = alpha
+        self.last_flattened_hand_data = None
 
+    def __lerp_data(self, q0, q1):
+        ret = []
+        new_q0 = np.copy(q0)
+        new_q1 = np.copy(q1)
+        for q0, q1 in zip(new_q0, new_q1):
+            ret.append(q0 * self.alpha + q1 * (1 - self.alpha))
+        return np.array(ret)
 
-def lerp_hand_data(hand_data, old_flattened_hand_data, h):
-    flattened_data = flattenHandPoints(hand_data)
-    filtered_flat_data = lerp_data(flattened_data, old_flattened_hand_data, h)
-    return packHandPoints(hand_data, filtered_flat_data), filtered_flat_data
+    def __lerp_hand_data(self, hand_data, old_flattened_hand_data):
+        flattened_data = flattenHandPoints(hand_data)
+        filtered_flat_data = self.__lerp_data(flattened_data, old_flattened_hand_data)
+        return packHandPoints(hand_data, filtered_flat_data), filtered_flat_data
+
+    def filter(self, data):
+        if self.last_flattened_hand_data is None:
+            self.last_flattened_hand_data = flattenHandPoints(data)
+        else:
+            data, self.last_flattened_hand_data = self.__lerp_hand_data(data, self.last_flattened_hand_data)
+        return data

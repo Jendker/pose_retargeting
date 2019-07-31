@@ -1,6 +1,7 @@
 from pykalman import KalmanFilter
 import numpy as np
 from pose_retargeting.filtering.measurements.sample_data import SampleData
+from pose_retargeting.filtering.utils import flattenHandPoints, packHandPoints
 import pickle
 import os
 import time
@@ -21,7 +22,7 @@ class Kalman:
             sample_data = SampleData()
             measurements = np.asarray(sample_data.getData())
             self.kf.em(measurements, n_iter=5)
-            self.kf.observation_covariance *= 40  # decrease confidence in data
+            self.kf.observation_covariance *= 30  # decrease confidence in data
             try:
                 os.mkdir(os.path.dirname(script_path) + '/models')
             except FileExistsError:
@@ -45,26 +46,11 @@ class Kalman:
     def getTransitionMatrix():
         return np.identity(63)
 
-    @staticmethod
-    def flattenHandPoints(data):
-        flattened_data = []
-        for joint_point in data.joints_position:
-            flattened_data.extend([joint_point.x, joint_point.y, joint_point.z])
-        return tuple(flattened_data)
-
-    @staticmethod
-    def packHandPoints(data, kalman_filter_output):
-        for i in range(0, 21):
-            data.joints_position[i].x = kalman_filter_output[i * 3]
-            data.joints_position[i].y = kalman_filter_output[i * 3 + 1]
-            data.joints_position[i].z = kalman_filter_output[i * 3 + 2]
-        return data
-
     def filter(self, data):
-        flattened_data = self.flattenHandPoints(data)
+        flattened_data = flattenHandPoints(data)
         self.positions = flattened_data
 
         self.last_filtered_state_means, self.last_filtered_state_covariances = \
             self.kf.filter_update(self.last_filtered_state_means, self.last_filtered_state_covariances, flattened_data)
-        return self.packHandPoints(data, self.last_filtered_state_means)
+        return packHandPoints(data, self.last_filtered_state_means)
 
