@@ -1,7 +1,7 @@
 from pykalman import KalmanFilter
 import numpy as np
 from pose_retargeting.filtering.measurements.sample_data import SampleData
-from pose_retargeting.filtering.utils import flattenHandPoints, packHandPoints
+from pose_retargeting.filtering.common import flattenHandPoints, packHandPoints
 import pickle
 import os
 import time

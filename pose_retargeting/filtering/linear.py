@@ -1,5 +1,5 @@
 import numpy as np
-from pose_retargeting.filtering.utils import packHandPoints, flattenHandPoints
+from pose_retargeting.filtering.common import packHandPoints, flattenHandPoints
 
 
 def slerp(q0, q1, h):
