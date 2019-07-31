@@ -89,7 +89,7 @@ class Mujoco(Simulator):
         if matrix.shape == (4, 4):
             matrix = matrix[:3, :3]
         return rotations.mat2quat(matrix)
-    
+
     def jacobianCalculation(self, *argv, **kwargs):
         return JacobianCalculationMujoco(*argv, **kwargs)
 
@@ -117,7 +117,7 @@ class Mujoco(Simulator):
         return [True, self.data.qpos[idx]]
 
     def getJointIndexPosition(self, index):
-        assert(len(self.data.qpos) == len(self.data.qvel))  # need to make sure, for some envs this is not the same
+        assert (len(self.data.qpos) == len(self.data.qvel))  # need to make sure, for some envs this is not the same
         return self.data.qpos[index]
 
     def getJointNamePosition(self, joint_name):
@@ -182,7 +182,7 @@ class Mujoco(Simulator):
 
     def getJointIndex(self, body_name):
         return self.model.joint_names.index(self.getBodyJointName(body_name))
-    
+
     def getJointNameIndex(self, joint_name):
         return self.model.joint_names.index(joint_name)
 
@@ -202,7 +202,8 @@ class Mujoco(Simulator):
         return new_angles
 
     def updateHandPosition(self, old_position):
-        return old_position + self.translate_hand_position
+        return 1.5 * (old_position + self.translate_hand_position)
+        # multiplication by constant to increase sensitivity
 
     @staticmethod
     def inverseUpdateHandPosition(old_position):
@@ -239,7 +240,6 @@ class Mujoco(Simulator):
         transformation_matrix = self.getTransformationMatrixToBase()
         try:
             for i, pose in enumerate(poses):
-
                 self.viewer.add_marker(pos=self.__transformPoint(pose, transformation_matrix), type=const.GEOM_SPHERE,
                                        size=np.ones(3) * 0.008, label='',
                                        rgba=np.array([1 * (i % 3), 1 * ((i + 1) % 3), 1 * ((i + 2) % 3), 0.6]))
