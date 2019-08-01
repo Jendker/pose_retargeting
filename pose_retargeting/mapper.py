@@ -75,7 +75,7 @@ class Mapper:
         position = [joint.x, joint.y, joint.z]
         return np.array(position)
 
-    def __publishMarkers(self, data):
+    def __publishMarkers(self, data, transformation_matrix=None):
         message = MarkerArray()
         lines = [[2, 9, 10, 11], [3, 12, 13, 14], [4, 15, 16, 17], [5, 18, 19, 20], [6, 7, 8], [0, 1, 6, 2, 3, 4, 5, 0]]
         time_now = rospy.Time.now()
@@ -93,6 +93,8 @@ class Mapper:
             finger_points = [data.joints_position[x] for x in line_points]
 
             for point in finger_points:
+                if transformation_matrix is not None:
+                    point = (transformation_matrix @ np.append(point, 1))[0:3]
                 message_point = Point()
                 message_point.x = point[0]
                 message_point.y = point[1]
@@ -197,6 +199,7 @@ class Mapper:
         new_hand_quaternion = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
         new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
         self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
+        return inverse_transformation_matrix
 
     def __transformToCameraLink(self, data):
         target_frame = self.camera_frame_name
@@ -226,10 +229,10 @@ class Mapper:
 
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
-        # self.__publishMarkers(data)  # to visualize results
-        # self.publishNewPointCloud(data)  # to visualize results
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
-        self.__setHandPosition(transformation_matrix)
+        inverse_transformation_matrix = self.__setHandPosition(transformation_matrix)
+        # self.__publishMarkers(data, inverse_transformation_matrix)  # to visualize results
+        # self.publishNewPointCloud(data)  # to visualize results
         self.hand.newPositionFromHPE(data)
 
     def getControlOnce(self):
