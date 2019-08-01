@@ -52,14 +52,6 @@ class Hand:
             hand_part.executeControl()
         self.error_calculation.calculateError()
 
-    @staticmethod
-    def clamp_velocities(action_vector):
-        max_velocity = 4
-        max_values_mat = np.full(action_vector[8:].size, max_velocity)
-        min_values_mat = np.full(action_vector[8:].size, -max_velocity)
-        action_vector[8:] = np.minimum(max_values_mat, action_vector[8:])
-        action_vector[8:] = np.maximum(min_values_mat, action_vector[8:])
-
     def getControlOnce(self, frequency):
         action_dict = {}
         for hand_part in self.hand_parts_list:
@@ -73,7 +65,6 @@ class Hand:
                                         constant_values=0)
         for k, v in action_dict.items():
             complete_action_vector[k] = v  #+ self.simulator.getJointIndexPosition(k)  # add position step to current
-        self.clamp_velocities(complete_action_vector)
         return complete_action_vector
 
     def newPositionFromHPE(self, new_data):
