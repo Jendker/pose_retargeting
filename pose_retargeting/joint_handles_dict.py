@@ -38,13 +38,13 @@ class JointHandlesDict:
                 joint_names = ['FFJ3', 'FFJ2', 'FFJ1', 'FFJ0', 'fftip', 'MFJ3', 'MFJ2', 'MFJ1',
                                'MFJ0', 'mftip', 'RFJ3', 'RFJ2', 'RFJ1', 'RFJ0', 'rftip', 'LFJ4',
                                'LFJ3', 'LFJ2', 'LFJ1', 'LFJ0', 'lftip', 'THJ4', 'THJ3', 'THJ2',
-                               'THJ1', 'THJ0', 'thtip', 'forearm']  # we lack the tip bodies
+                               'THJ1', 'THJ0', 'thtip', 'forearm']
 
                 body_names = ['ffknuckle', 'ffproximal', 'ffmiddle', 'ffdistal', 'fftip', 'mfknuckle',
                               'mfproximal', 'mfmiddle', 'mfdistal', 'mftip', 'rfknuckle', 'rfproximal',
                               'rfmiddle', 'rfdistal', 'rftip', 'lfmetacarpal', 'lfknuckle', 'lfproximal',
                               'lfmiddle', 'lfdistal', 'lftip', 'thbase', 'thproximal', 'thhub',
-                              'thmiddle', 'thdistal', 'thtip', 'forearm']  # we lack the tip bodies
+                              'thmiddle', 'thdistal', 'thtip', 'forearm']
             else:
                 raise ValueError
 
