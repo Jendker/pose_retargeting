@@ -33,7 +33,7 @@ class Mujoco(Simulator):
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
         self.hand_base_index = self.model.body_names.index(self.hand_base_name)
-        self.hand_target_position = self.getObjectIndexPosition(self.hand_base_index, -1) - self.translate_hand_position
+        self.hand_target_position = -self.translate_hand_position  # neutralize the translation
         self.hand_target_orientation = self.quat2euler(  # here euler because we set action as euler
             self.getObjectIndexQuaternion(self.hand_base_index))
         self.scaling_points_knuckles = self.__getKnucklesPositions()
@@ -226,7 +226,7 @@ class Mujoco(Simulator):
         return self.data.qvel[index]
 
     def getShiftTransformation(self):
-        return euclideanTransformation(np.identity(3), np.zeros(3))
+        return np.identity(4)  # no shift necessary
 
     def getJointLimits(self, body_name):
         idx = self.getJointIndex(body_name)
