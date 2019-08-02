@@ -207,7 +207,7 @@ class Mujoco(Simulator):
         return new_angles
 
     def updateHandPosition(self, old_position):
-        return 1.5 * (old_position + self.translate_hand_position)
+        return 1 * (old_position + self.translate_hand_position)
         # multiplication by constant to increase sensitivity
 
     @staticmethod
