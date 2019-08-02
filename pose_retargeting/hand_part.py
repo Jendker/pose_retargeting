@@ -37,9 +37,9 @@ class HandPart:
         self.tasks_count = len(self.task_descriptor_handles)
 
         if self.task_prioritization:
-            self.K_matrix = np.identity(3) * 10  # for prioritization we use just single error
+            self.K_matrix = np.identity(3) * 15  # for prioritization we use just single error
         else:
-            self.K_matrix = np.identity(3 * len(self.task_descriptor_handles)) * 2
+            self.K_matrix = np.identity(3 * len(self.task_descriptor_handles)) * 15
         self.weight_matrix_inv = np.identity(self.DOF_count)
 
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
