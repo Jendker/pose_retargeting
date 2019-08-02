@@ -8,6 +8,7 @@ import tf
 from geometry_msgs.msg import Point
 from sensor_msgs.msg import PointCloud
 from visualization_msgs.msg import MarkerArray, Marker
+from dl_pose_estimation.msg import JointsPosition
 import geometry_msgs.msg
 from pose_retargeting.rotations_vrep import quaternion_from_matrix
 from pose_retargeting.hand import Hand
@@ -189,17 +190,21 @@ class Mapper:
             point_cloud.points.append(pc_point)
         self.points_pub.publish(point_cloud)
 
-    def __setHandPosition(self, transformation_matrix):
-        inverse_rotation_matrix = np.linalg.inv(transformation_matrix[0:3, 0:3])
-        translation = transformation_matrix[0:3, 3]
-        inverse_translation = -np.dot(inverse_rotation_matrix, translation)
-        inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
-        shifted_inverse_transformation_matrix = np.dot(self.simulator.getShiftTransformation(),
-                                                       inverse_transformation_matrix)  # shift to keep in target area
-        new_hand_quaternion = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
-        new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
-        self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
-        return inverse_transformation_matrix
+    def __setHandPosition(self, transformation_matrix=None, hand_data=None):
+        if transformation_matrix is not None:
+            inverse_rotation_matrix = np.linalg.inv(transformation_matrix[0:3, 0:3])
+            translation = transformation_matrix[0:3, 3]
+            inverse_translation = -np.dot(inverse_rotation_matrix, translation)
+            inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
+            shifted_inverse_transformation_matrix = np.dot(self.simulator.getShiftTransformation(),
+                                                           inverse_transformation_matrix)  # shift to keep in target area
+            new_hand_quaternion = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
+            new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
+            self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
+            return inverse_transformation_matrix
+        else:
+            self.simulator.setHandTargetPositionAndQuaternion(hand_data[:3], hand_data[3:])
+
 
     def __transformToCameraLink(self, data):
         target_frame = self.camera_frame_name
@@ -230,10 +235,24 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)
         data = self.__transformDataWithTransform(data, transformation_matrix)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
-        inverse_transformation_matrix = self.__setHandPosition(transformation_matrix)
+        inverse_transformation_matrix = self.__setHandPosition(transformation_matrix=transformation_matrix)
         # self.__publishMarkers(data, inverse_transformation_matrix)  # to visualize results
         # self.publishNewPointCloud(data)  # to visualize results
         self.hand.newPositionFromHPE(data)
+
+    @staticmethod
+    def __packHandPointsMatrix(data, hand_points_array):
+        assert (hand_points_array.shape == (21, 3))
+        assert (len(data.joints_position) == 0)
+        for i in range(0, 21):
+            data.joints_position.append(hand_points_array[i, :])
+        return data
+
+    def newHandPointsData(self, data):
+        self.__setHandPosition(hand_data=data['base_pose'])
+        message_data = JointsPosition()
+        message_data = self.__packHandPointsMatrix(message_data, data['finger_points'])
+        self.hand.newPositionFromHPE(message_data)
 
     def getControlOnce(self):
         frequency = self.FPSCounter.getAndPrintFPS()

@@ -18,16 +18,21 @@ def euclideanTransformation(rotation_matrix, transformation_vector):
 
 
 class Mujoco(Simulator):
-    def __init__(self, env, env_name):
+    def __init__(self, env, env_name, no_translation=False):
         super().__init__()
         self.type = SimulatorType.MUJOCO
-        self.env = env.env.env
+        try:
+            self.env = env.env.env
+        except AttributeError:
+            self.env = env.env
         self.last_observations = []
         self.model = self.env.model
         self.data = self.env.data
         self.env_name = env_name
 
         self.translate_hand_position = np.array([-0.8, 0, 0])
+        if no_translation:
+            self.translate_hand_position = np.zeros(3)
         self.limits_hand_orientation = ((-3.14, 3.14), (-4.71, 1.57), (-4.71, 1.57))
 
         self.joint_handles_dict = JointHandlesDict(self)
