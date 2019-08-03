@@ -1,4 +1,5 @@
 from pose_retargeting.simulator.simulator import Simulator, SimulatorType
+from pose_retargeting.vrep_types import VRepReturn, VRepMode
 import pose_retargeting.vrep as vrep
 import numpy as np
 import rospy
@@ -6,6 +7,12 @@ import time
 from pose_retargeting.joint_handles_dict import JointHandlesDict
 from pose_retargeting.jacobians.jacobian_calculation_vrep import JacobianCalculationVRep
 import pose_retargeting.rotations_vrep as rotations
+import logging
+logger = logging.getLogger(__name__)
+
+
+VRepMode2vrep = {VRepMode.BUFFER: vrep.simx_opmode_buffer, VRepMode.STREAMING: vrep.simx_opmode_streaming,
+                 VRepMode.BLOCKING: vrep.simx_opmode_blocking, VRepMode.ONESHOT: vrep.simx_opmode_oneshot}
 
 
 def euclideanTransformation(rotation_matrix, transformation_vector):
@@ -25,11 +32,11 @@ class VRep(Simulator):
         while self.clientID == -1:
             if rospy.is_shutdown():
                 exit(0)
-            rospy.loginfo("No connection to remote API server, retrying...")
+            logger.info("No connection to remote API server, retrying...")
             vrep.simxFinish(-1)
             time.sleep(3)
             self.clientID = vrep.simxStart('127.0.0.1', 19999, True, True, 5000, 5)  # Connect to V-REP
-        rospy.loginfo('Connected to remote API server.')
+        logger.info('Connected to remote API server.')
 
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_handle = self.getHandle('ShadowRobot_base_tip')
@@ -49,35 +56,37 @@ class VRep(Simulator):
                                            self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.281])]
 
     def __del__(self):
-        rospy.loginfo('Closing connection to remote API server.')
+        logger.info('Closing connection to remote API server.')
         vrep.simxFinish(self.clientID)
 
     def jacobianCalculation(self, *argv, **kwargs):
         return JacobianCalculationVRep(*argv, **kwargs)
 
-    def simulationObjectsPose(self, handles, mode=vrep.simx_opmode_buffer):
+    def simulationObjectsPose(self, handles, mode=VRepMode.BUFFER):
         current_pos = []
         for handle in handles:
-            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, self.hand_base_handle, mode)
+            _, this_current_pos = vrep.simxGetObjectPosition(self.clientID, handle, self.hand_base_handle,
+                                                             VRepMode2vrep[mode])
             current_pos.extend(this_current_pos)
         return np.array(current_pos)
 
-    def getJointPosition(self, joint_handle, mode=vrep.simx_opmode_buffer):
-        result, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, mode)
+    def getJointPosition(self, joint_handle, mode=VRepMode.BUFFER):
+        result, joint_position = vrep.simxGetJointPosition(self.clientID, joint_handle, VRepMode2vrep[mode])
         return [result == vrep.simx_return_ok, joint_position]
 
     def getObjectPosition(self, handle, parent_handle, **kwargs):
-        return vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, kwargs['mode'])[1]
+        return vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, VRepMode2vrep[kwargs['mode']])[1]
 
     def getObjectPositionWithReturn(self, handle, parent_handle, mode):
-        result, object_position = vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, mode)
+        result, object_position = vrep.simxGetObjectPosition(self.clientID, handle, parent_handle, VRepMode2vrep[mode])
         return [result == vrep.simx_return_ok, object_position]
 
     def setObjectPosition(self, handle, base_handle, position_to_set):
         vrep.simxSetObjectPosition(self.clientID, handle, base_handle, position_to_set, vrep.simx_opmode_oneshot)
 
     def getObjectQuaternion(self, handle, **kwargs):
-        return vrep.simxGetObjectQuaternion(self.clientID, handle, kwargs['parent_handle'], kwargs['mode'])[1]
+        return vrep.simxGetObjectQuaternion(self.clientID, handle, kwargs['parent_handle'],
+                                            VRepMode2vrep[kwargs['mode']])[1]
 
     def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
         vrep.simxSetObjectQuaternion(self.clientID, handle, parent_handle, quaternion_to_set,
@@ -103,14 +112,18 @@ class VRep(Simulator):
         if result != 0 and not disable_warning_on_no_connection:
             self.errors_in_connection += 1
             if self.errors_in_connection > 10:
-                rospy.logwarn("vrep.simxSetJointTargetVelocity return code: %d", result)
-                rospy.loginfo("Probably no connection with remote API server. Exiting.")
+                logger.warning("vrep.simxSetJointTargetVelocity return code: %d", result)
+                logger.info("Probably no connection with remote API server. Exiting.")
                 exit(0)
             else:
                 time.sleep(0.2)
 
     def getObjectHandle(self, handle_name):
-        return vrep.simxGetObjectHandle(self.clientID, handle_name, vrep.simx_opmode_blocking)
+        result = vrep.simxGetObjectHandle(self.clientID, handle_name, vrep.simx_opmode_blocking)
+        if result == vrep.simx_return_ok:
+            return VRepReturn.OK
+        else:
+            return VRepReturn.ERROR
 
     def getHandBaseAction(self):
         return None

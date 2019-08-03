@@ -2,7 +2,7 @@
 
 import numpy as np
 from pose_retargeting.error_calculation import ErrorCalculation
-from pose_retargeting.jacobians.jacobian_calculation_vrep import ConfigurationType
+from pose_retargeting.jacobians.configuration_type import ConfigurationType
 from pose_retargeting.hand_part import HandPart
 
 

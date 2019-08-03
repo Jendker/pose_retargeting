@@ -2,20 +2,24 @@
 
 import numpy as np
 import time
-import rospy
-import tf2_ros
-import tf
-from geometry_msgs.msg import Point
-from sensor_msgs.msg import PointCloud
-from visualization_msgs.msg import MarkerArray, Marker
-from dl_pose_estimation.msg import JointsPosition
-import geometry_msgs.msg
+try:
+    import rospy
+    import tf2_ros
+    import tf
+    from geometry_msgs.msg import Point
+    from sensor_msgs.msg import PointCloud
+    from visualization_msgs.msg import MarkerArray, Marker
+    from dl_pose_estimation.msg import JointsPosition
+    import geometry_msgs.msg
+except ImportError:
+    pass
 from pose_retargeting.rotations_vrep import quaternion_from_matrix
 from pose_retargeting.hand import Hand
 from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
-from pose_retargeting.simulator.sim_vrep import VRep
 from pose_retargeting.filtering.kalman import Kalman
+import logging
+logger = logging.getLogger(__name__)
 
 
 class Mapper:
@@ -24,16 +28,23 @@ class Mapper:
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
         self.last_update = time.time()
-        self.using_left_hand = rospy.get_param('transformation/left_hand', False)
+        try:
+            self.using_left_hand = rospy.get_param('transformation/left_hand', False)
+        except NameError:
+            self.using_left_hand = False
 
         self.data_filtering = Kalman()
 
-        self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
-        self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
-        self.tf_listener_ = tf.TransformListener()
+        try:
+            self.marker_pub = rospy.Publisher(node_name + '/transformed_hand', MarkerArray, queue_size=10)
+            self.points_pub = rospy.Publisher(node_name + '/in_base', PointCloud, queue_size=10)
+            self.tf_listener_ = tf.TransformListener()
+        except NameError:
+            pass
         self.errors_in_connection = 0
         self.simulator = simulator
         if self.simulator is None:
+            from pose_retargeting.simulator.sim_vrep import VRep
             self.simulator = VRep()
 
         self.hand = Hand(self.simulator)
@@ -41,7 +52,7 @@ class Mapper:
 
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler(self.simulator)
-        rospy.loginfo("Pose mapping initialization finished.")
+        logger.info("Pose mapping initialization finished.")
 
     def __euclideanTransformation(self, rotation_matrix, transformation_vector):
         top = np.concatenate((rotation_matrix, transformation_vector[:, np.newaxis]), axis=1)

@@ -2,8 +2,11 @@
 
 import time
 import scipy.io
-import rospy
-import pose_retargeting.vrep as vrep
+try:
+    import rospy
+except ImportError:
+    pass
+from pose_retargeting.vrep_types import VRepMode
 import numpy as np
 import os
 
@@ -33,13 +36,13 @@ class ErrorCalculation:
         streaming = []
         hand_base_handle = self.simulator.getHandle('ShadowRobot_base_tip')
         for handle in self.all_joint_handles:  # initialize streaming
-            result, _ = self.simulator.getObjectPositionWithReturn(handle, hand_base_handle, vrep.simx_opmode_streaming)
+            result, _ = self.simulator.getObjectPositionWithReturn(handle, hand_base_handle, VRepMode.STREAMING)
             streaming.append(result)
         while not all(result is True for result in streaming):
             streaming = []
             for handle in self.all_joint_handles:  # initialize streaming
                 result, _ = self.simulator.getObjectPositionWithReturn(handle, hand_base_handle,
-                                                                       vrep.simx_opmode_buffer)
+                                                                       VRepMode.BUFFER)
                 streaming.append(result)
             time.sleep(0.01)
         self.last_human_hand_pose = []

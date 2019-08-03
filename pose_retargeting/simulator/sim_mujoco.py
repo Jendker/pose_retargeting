@@ -1,5 +1,5 @@
 from pose_retargeting.simulator.simulator import Simulator, SimulatorType
-import pose_retargeting.vrep as vrep
+from pose_retargeting.vrep_types import VRepMode
 import numpy as np
 import pose_retargeting.rotations_mujoco as rotations
 from pose_retargeting.joint_handles_dict import JointHandlesDict
@@ -98,14 +98,14 @@ class Mujoco(Simulator):
     def jacobianCalculation(self, *argv, **kwargs):
         return JacobianCalculationMujoco(*argv, **kwargs)
 
-    def simulationObjectsPose(self, body_names, mode=vrep.simx_opmode_buffer):
+    def simulationObjectsPose(self, body_names, mode=VRepMode.BUFFER):
         """
         Returns pose in hand base coordinate system
         :param body_names:
         :param mode: defined for backward compability with VRep
         :return:
         """
-        if mode != vrep.simx_opmode_buffer and mode != vrep.simx_opmode_blocking:
+        if mode != VRepMode.BUFFER and mode != VRepMode.BLOCKING:
             return
         current_pos = []
         inverse_transformation_matrix = self.__getInverseTransformationMatrixToBase()
@@ -115,8 +115,8 @@ class Mujoco(Simulator):
             current_pos.extend(np.dot(inverse_transformation_matrix, np.append(this_current_pos, [1]))[0:3])
         return np.array(current_pos)
 
-    def getJointPosition(self, body_name, mode=vrep.simx_opmode_buffer):
-        if mode != vrep.simx_opmode_buffer and mode != vrep.simx_opmode_blocking:
+    def getJointPosition(self, body_name, mode=VRepMode.BUFFER):
+        if mode != VRepMode.BUFFER and mode != VRepMode.BLOCKING:
             return
         idx = self.model.joint_names.index(self.getBodyJointName(body_name))
         return [True, self.data.qpos[idx]]
@@ -137,7 +137,7 @@ class Mujoco(Simulator):
         return [True, self.getObjectPosition(handle, parent_handle, mode=mode)]
 
     def getObjectIndexPosition(self, index, parent_handle, mode=None):
-        if mode == vrep.simx_opmode_streaming:
+        if mode == VRepMode.STREAMING:
             return None
         current_pos = self.data.body_xpos[index]
         if parent_handle == -1:

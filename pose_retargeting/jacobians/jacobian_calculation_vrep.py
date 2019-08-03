@@ -1,5 +1,4 @@
 import pose_retargeting.vrep as vrep
-from enum import Enum
 import sympy as sp
 import numpy as np
 import time
@@ -8,12 +7,7 @@ import pickle
 import os
 import rospkg
 from pose_retargeting.jacobians.jacobian_calculation import JacobianCalculation
-
-
-class ConfigurationType(Enum):
-    finger = 1
-    thumb = 2
-    pinkie = 3
+from pose_retargeting.jacobians.configuration_type import ConfigurationType
 
 
 class JacobianCalculationVRep(JacobianCalculation):

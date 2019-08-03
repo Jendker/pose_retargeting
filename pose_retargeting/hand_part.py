@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
-import pose_retargeting.vrep as vrep
+from pose_retargeting.vrep_types import VRepMode
 import numpy as np
-import rospy
+try:
+    import rospy
+except ImportError:
+    pass
 from pose_retargeting.simulator.simulator import SimulatorType
 import math
 import time
@@ -44,7 +47,7 @@ class HandPart:
 
         self.human_hand_vel = np.zeros(3 * self.tasks_count)
         self.last_human_hand_part_pose = self.simulator.simulationObjectsPose(
-            self.task_descriptor_handles, mode=vrep.simx_opmode_blocking)
+            self.task_descriptor_handles, mode=VRepMode.BLOCKING)
         all_handles_for_jacobian_calc = self.list_joints_handles[:]
         all_handles_for_jacobian_calc.append(self.tip_handle)
         self.jacobian_calculation = self.simulator.jacobianCalculation(
@@ -52,9 +55,9 @@ class HandPart:
             self.simulator, configuration_type=configuration_type)
 
         for joint_handle in self.list_joints_handles:  # initialize streaming
-            simulator.getJointPosition(joint_handle, mode=vrep.simx_opmode_streaming)
+            simulator.getJointPosition(joint_handle, mode=VRepMode.STREAMING)
         for handle in self.task_descriptor_handles:
-            simulator.getObjectPosition(handle, self.hand_base_handle, mode=vrep.simx_opmode_streaming)
+            simulator.getObjectPosition(handle, self.hand_base_handle, mode=VRepMode.STREAMING)
 
         self.joint_velocity = np.zeros(self.DOF_count)
         self.joints_limits = []

@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-import rospy
-import pose_retargeting.vrep as vrep
+from pose_retargeting.vrep_types import VRepReturn
 from pose_retargeting.simulator.simulator import SimulatorType
+import logging
+logger = logging.getLogger(__name__)
 
 
 class JointHandlesDict:
@@ -50,8 +51,8 @@ class JointHandlesDict:
             self.body_handles_dict = {}
             for handle_name in body_handle_names:
                 result, handle = simulator.getObjectHandle(handle_name)
-                if result != vrep.simx_return_ok:
-                    rospy.logerr("Handle %s does not exist! Exiting.", handle_name)
+                if result != VRepReturn.OK:
+                    logger.error("Handle %s does not exist! Exiting.", handle_name)
                     exit(1)
                 self.body_handles_dict[handle_name] = handle
         else:
