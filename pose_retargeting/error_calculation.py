@@ -9,6 +9,8 @@ except ImportError:
 from pose_retargeting.vrep_types import VRepMode
 import numpy as np
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 
 class ErrorCalculation:
@@ -76,13 +78,13 @@ class ErrorCalculation:
         for hand_part_index, indices_group in enumerate(self.indices_of_joints_from_hpe):
             hand_part_poses = []
             for index in indices_group:
-                hand_part_poses.append(new_data.joints_position[index])
+                hand_part_poses.append(new_data[index])
             self.last_human_hand_pose[hand_part_index] = np.concatenate(hand_part_poses)
         self.last_hpe_update = time.time()
         if not self.running:
             self.running = True
             self.start_time = time.time()
-            rospy.loginfo("Starting calculation of errors for finger joints.")
+            logger.info("Starting calculation of errors for finger joints.")
 
     def stop(self):
         self.running = False

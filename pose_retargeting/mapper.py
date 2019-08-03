@@ -240,6 +240,13 @@ class Mapper:
     def pointToNpArray(self, point):
         return np.array([point.x, point.y, point.z])
 
+    @staticmethod
+    def __unPackHandPointsMatrix(data):
+        ret = np.empty((21, 3))
+        for i in range(0, 21):
+            ret[i, :] = data.joints_position[i]
+        return ret
+
     def callback(self, data):
         if self.using_left_hand:
             data = self.__mirrorData(data)
@@ -252,21 +259,12 @@ class Mapper:
         inverse_transformation_matrix = self.__setHandPosition(transformation_matrix=transformation_matrix)
         # self.__publishMarkers(data, inverse_transformation_matrix)  # to visualize results
         # self.publishNewPointCloud(data)  # to visualize results
+        data = self.__unPackHandPointsMatrix(data)
         self.hand.newPositionFromHPE(data)
-
-    @staticmethod
-    def __packHandPointsMatrix(data, hand_points_array):
-        assert (hand_points_array.shape == (21, 3))
-        assert (len(data.joints_position) == 0)
-        for i in range(0, 21):
-            data.joints_position.append(hand_points_array[i, :])
-        return data
 
     def newHandPointsData(self, data):
         self.__setHandPosition(hand_data=data['base_pose'])
-        message_data = JointsPosition()
-        message_data = self.__packHandPointsMatrix(message_data, data['finger_points'])
-        self.hand.newPositionFromHPE(message_data)
+        self.hand.newPositionFromHPE(data['finger_points'])
 
     def getControlOnce(self):
         frequency = self.FPSCounter.getAndPrintFPS()
