@@ -215,9 +215,7 @@ class Mapper:
             return inverse_transformation_matrix
         else:
             assert(hand_data.size == 7)
-            discrepancy_between_ctrl_and_pose = [0, 0, 0.075]  # from falling down at gainprm=500
-            self.simulator.setHandTargetPositionAndQuaternion(hand_data[:3] + discrepancy_between_ctrl_and_pose,
-                                                              hand_data[3:])
+            self.simulator.setHandTargetPositionAndQuaternion(hand_data[:3], hand_data[3:])
 
 
     def __transformToCameraLink(self, data):
