@@ -7,8 +7,9 @@ from pose_retargeting.hand_part import HandPart
 
 
 class Hand:
-    def __init__(self, simulator):
+    def __init__(self, simulator, calculate_error=False):
         self.simulator = simulator
+        self.calculate_error = calculate_error
 
         index_finger = HandPart(['IMCP_side_joint', 'IMCP_front_joint', 'IPIP_joint', 'IDIP_joint'],
                                 'ITIP_tip',
@@ -38,19 +39,21 @@ class Hand:
                                 'thumb', self.simulator)
 
         self.hand_parts_list = (index_finger, middle_finger, ring_finger, pinkie_finger, thumb_finger)
-        self.error_calculation = ErrorCalculation(list(self.hand_parts_list),
-                                                  [['IPIP_joint', 'IDIP_joint', 'ITIP_tip'],
-                                                   ['MPIP_joint', 'MDIP_joint', 'MTIP_tip'],
-                                                   ['RPIP_joint', 'RDIP_joint', 'RTIP_tip'],
-                                                   ['PPIP_joint', 'PDIP_joint', 'PTIP_tip'],
-                                                   ['TPIP_front_joint', 'TDIP_joint', 'TTIP_tip']],
-                                                  [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
-                                                   [6, 7, 8]], 10, self.simulator)
+        if calculate_error:
+            self.error_calculation = ErrorCalculation(list(self.hand_parts_list),
+                                                      [['IPIP_joint', 'IDIP_joint', 'ITIP_tip'],
+                                                       ['MPIP_joint', 'MDIP_joint', 'MTIP_tip'],
+                                                       ['RPIP_joint', 'RDIP_joint', 'RTIP_tip'],
+                                                       ['PPIP_joint', 'PDIP_joint', 'PTIP_tip'],
+                                                       ['TPIP_front_joint', 'TDIP_joint', 'TTIP_tip']],
+                                                      [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
+                                                       [6, 7, 8]], 10, self.simulator)
 
     def controlOnce(self):
         for hand_part in self.hand_parts_list:
             hand_part.executeControl()
-        self.error_calculation.calculateError()
+        if self.calculate_error:
+            self.error_calculation.calculateError()
 
     def getControlOnce(self, frequency):
         action_dict = {}
@@ -70,4 +73,5 @@ class Hand:
     def newPositionFromHPE(self, new_data):
         for hand_part in self.hand_parts_list:
             hand_part.newPositionFromHPE(new_data)
-        self.error_calculation.newPositionFromHPE(new_data)
+        if self.calculate_error:
+            self.error_calculation.newPositionFromHPE(new_data)
