@@ -18,9 +18,10 @@ def euclideanTransformation(rotation_matrix, transformation_vector):
 
 
 class Mujoco(Simulator):
-    def __init__(self, env, env_name, no_translation=False):
+    def __init__(self, env, env_name, no_translation=False, visualisation=False):
         super().__init__()
         self.type = SimulatorType.MUJOCO
+        self.visualisation = visualisation
         try:
             self.env = env.env.env
         except AttributeError:
@@ -44,9 +45,10 @@ class Mujoco(Simulator):
         self.scaling_points_knuckles = self.__getKnucklesPositions()
         self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
                                            self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.271])]
-        self.scheduler = sched.scheduler(time.time, time.sleep)
-        setup_viewer_thread = threading.Thread(target=self.__setupViewer)
-        setup_viewer_thread.start()
+        if self.visualisation:
+            self.scheduler = sched.scheduler(time.time, time.sleep)
+            setup_viewer_thread = threading.Thread(target=self.__setupViewer)
+            setup_viewer_thread.start()
 
     def __setupViewer(self):
         try:
@@ -242,11 +244,12 @@ class Mujoco(Simulator):
         return np.dot(transformation_matrix, np.append(point, [1]))[0:3]
 
     def visualisePose(self, poses):
-        transformation_matrix = self.getTransformationMatrixToBase()
-        try:
-            for i, pose in enumerate(poses):
-                self.viewer.add_marker(pos=self.__transformPoint(pose, transformation_matrix), type=const.GEOM_SPHERE,
-                                       size=np.ones(3) * 0.008, label='',
-                                       rgba=np.array([1 * (i % 3), 1 * ((i + 1) % 3), 1 * ((i + 2) % 3), 0.6]))
-        except (AttributeError, TypeError):
-            pass
+        if self.visualisation:
+            transformation_matrix = self.getTransformationMatrixToBase()
+            try:
+                for i, pose in enumerate(poses):
+                    self.viewer.add_marker(pos=self.__transformPoint(pose, transformation_matrix), type=const.GEOM_SPHERE,
+                                           size=np.ones(3) * 0.008, label='',
+                                           rgba=np.array([1 * (i % 3), 1 * ((i + 1) % 3), 1 * ((i + 2) % 3), 0.6]))
+            except (AttributeError, TypeError):
+                pass
