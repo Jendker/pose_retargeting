@@ -49,6 +49,8 @@ class Mujoco(Simulator):
             self.scheduler = sched.scheduler(time.time, time.sleep)
             setup_viewer_thread = threading.Thread(target=self.__setupViewer)
             setup_viewer_thread.start()
+        self.act_mid = np.mean(self.model.actuator_ctrlrange, axis=1)
+        self.act_rng = 0.5*(self.model.actuator_ctrlrange[:,1]-self.model.actuator_ctrlrange[:,0])
 
     def __setupViewer(self):
         try:
@@ -82,6 +84,9 @@ class Mujoco(Simulator):
         rotation_matrix = self.data.body_xmat[idx].reshape((3, 3))
         translation = self.data.body_xpos[idx]
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
+
+    def clampActions(self, actions):
+        return (actions - self.act_mid) / self.act_rng
 
     @staticmethod
     def quat2euler(quat):

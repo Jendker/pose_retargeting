@@ -268,6 +268,11 @@ class Mapper:
         frequency = self.FPSCounter.getAndPrintFPS()
         return self.hand.getControlOnce(frequency)
 
+    def getClampedControlOnce(self):
+        frequency = self.FPSCounter.getAndPrintFPS()
+        actions = self.hand.getControlOnce(frequency)
+        return self.simulator.clampActions(actions)
+
     def __executeInverseOnce(self):
         self.hand.controlOnce()
 
