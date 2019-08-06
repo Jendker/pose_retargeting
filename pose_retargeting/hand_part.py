@@ -99,13 +99,15 @@ class HandPart:
 
         lambda_max = 0.01
         epsilon = 0.001
-        _, s, _ = np.linalg.svd(jacobian)
+        u, s, _ = np.linalg.svd(jacobian)
         smallest_sigma = s[jacobian.shape[0] - 1]
         if smallest_sigma >= epsilon:
             output_lambda = 0
+            return np.identity(3) * output_lambda
         else:
             output_lambda = (1 - (smallest_sigma / epsilon) ** 2.) * lambda_max
-        return np.identity(3) * output_lambda
+            ret = output_lambda * np.outer(u[:, jacobian.shape[0] - 1], u[:, jacobian.shape[0] - 1])
+            return ret
 
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(self.DOF_count)
