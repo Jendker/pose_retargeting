@@ -192,7 +192,9 @@ class HandPart:
         error = self.__getError()
         self.__updateWeightMatrixInverse()
         pseudo_inverse_jacobian = self.__getPseudoInverseForTaskAugmentation()
-        q_vel = np.dot(pseudo_inverse_jacobian, (self.human_hand_vel + np.dot(self.K_matrix, error)))
+        rotation_matrix = self.simulator.getTransformationMatrixToBase()[0:3, 0:3]
+        stacked_rotation_matrix = np.block([[rotation_matrix, np.zeros((3, 3))], [np.zeros((3, 3)), rotation_matrix]])
+        q_vel = np.dot(pseudo_inverse_jacobian, stacked_rotation_matrix @ (self.human_hand_vel + np.dot(self.K_matrix, error)))
         self.joint_velocity = q_vel
         return self.__setJointsTargetVelocity(self.joint_velocity)
 
