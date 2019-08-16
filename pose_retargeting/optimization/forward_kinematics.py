@@ -2,13 +2,15 @@ from pydrake.multibody.parsing import Parser
 from pydrake.multibody.plant import AddMultibodyPlantSceneGraph
 from pydrake.systems.framework import DiagramBuilder
 import numpy as np
+import os
 
 
 class ForwardKinematics:
     def __init__(self):
         builder = DiagramBuilder()
         self.plant, _ = AddMultibodyPlantSceneGraph(builder)
-        self.instance = Parser(self.plant).AddModelFromFile("../resources/ShadowRobot/URDF/shadowrobot.urdf")
+        file_dir = os.path.dirname(__file__)
+        self.instance = Parser(self.plant).AddModelFromFile(file_dir + "/model/shadowrobot.urdf")
         self.plant.Finalize()
         self.context = self.plant.CreateDefaultContext()
 
