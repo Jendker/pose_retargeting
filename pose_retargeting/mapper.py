@@ -18,6 +18,7 @@ from pose_retargeting.hand import Hand
 from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
 from pose_retargeting.filtering.kalman import Kalman
+from pose_retargeting.optimization.pso import PSO
 import logging
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ class Mapper:
         self.FPSCounter = FPSCounter()
         self.scaler = Scaler(self.simulator)
         logger.info("Pose mapping initialization finished.")
+
+        self.PSO = PSO()
 
     def __euclideanTransformation(self, rotation_matrix, transformation_vector):
         top = np.concatenate((rotation_matrix, transformation_vector[:, np.newaxis]), axis=1)
@@ -271,6 +274,7 @@ class Mapper:
     def getClampedControlOnce(self):
         frequency = self.FPSCounter.getAndPrintFPS()
         actions = self.hand.getControlOnce(frequency)
+        self.PSO.optimize(actions, frequency)
         return self.simulator.clampActions(actions)
 
     def __executeInverseOnce(self):
