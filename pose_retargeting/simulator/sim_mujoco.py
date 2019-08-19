@@ -269,3 +269,6 @@ class Mujoco(Simulator):
                                            rgba=np.array([1 * (i % 3), 1 * ((i + 1) % 3), 1 * ((i + 2) % 3), 0.6]))
             except (AttributeError, TypeError):
                 pass
+
+    def getAllJointNames(self):
+        return self.model.joint_names[:-6]
