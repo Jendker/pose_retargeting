@@ -107,7 +107,18 @@ class Mujoco(Simulator):
 
     def simulationObjectsPose(self, body_names, mode=VRepMode.BUFFER):
         """
-        Returns pose in hand base coordinate system
+        Returns single vector of bodies pose in hand base coordinate system
+        :param body_names:
+        :param mode: defined for backward compability with VRep
+        :return:
+        """
+        if mode != VRepMode.BUFFER and mode != VRepMode.BLOCKING:
+            return
+        return np.concatenate(self.simulationObjectsPoseList(body_names), axis=None)
+
+    def simulationObjectsPoseList(self, body_names, mode=VRepMode.BUFFER):
+        """
+        Returns list of bodies pose in hand base coordinate system
         :param body_names:
         :param mode: defined for backward compability with VRep
         :return:
@@ -119,8 +130,8 @@ class Mujoco(Simulator):
         for body_name in body_names:
             idx = self.model.body_names.index(body_name)
             this_current_pos = self.data.body_xpos[idx]
-            current_pos.extend(np.dot(inverse_transformation_matrix, np.append(this_current_pos, [1]))[0:3])
-        return np.array(current_pos)
+            current_pos.append(np.dot(inverse_transformation_matrix, np.append(this_current_pos, [1]))[0:3])
+        return current_pos
 
     def getJointPosition(self, body_name, mode=VRepMode.BUFFER):
         if mode != VRepMode.BUFFER and mode != VRepMode.BLOCKING:
