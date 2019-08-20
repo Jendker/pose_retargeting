@@ -1,4 +1,3 @@
-from pose_retargeting.optimization.forward_kinematics import ForwardKinematics
 from pose_retargeting.simulator.sim_mujoco import euclideanTransformation
 import numpy as np
 
@@ -21,7 +20,6 @@ class Particle:
 class PSO:
     def __init__(self, mujoco_env):
         self.mujoco_env = mujoco_env
-        self.forward_kinematics = ForwardKinematics()
         self.parameters = {'c1': 2.8, 'c2': 1.3}
         psi = self.parameters['c1'] + self.parameters['c2']
         self.parameters['w'] = 2/abs(2-psi-np.sqrt(psi*psi-4 * psi))

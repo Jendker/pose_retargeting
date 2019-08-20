@@ -19,6 +19,7 @@ from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
 from pose_retargeting.filtering.kalman import Kalman
 from pose_retargeting.optimization.pso import PSO
+from pose_retargeting.simulator.sim_mujoco import euclideanTransformation
 import logging
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,12 @@ class Mapper:
         logger.info("Pose mapping initialization finished.")
 
         self.PSO = PSO(self.simulator)
+        self.start_rotation_base = self.simulator.getHandBaseRotationMatrix.reshape((3, 3)).copy()
+        self.translation_base = self.simulator.getHandBasePosition.copy()
+        self.inverse_start_transformation_base = euclideanTransformation(self.start_rotation_base.T,
+                                                                         -self.start_rotation_base.T
+                                                                         @ self.translation_base)
+        self.transformation_to_origin_from_demo = None
 
     def __euclideanTransformation(self, rotation_matrix, transformation_vector):
         top = np.concatenate((rotation_matrix, transformation_vector[:, np.newaxis]), axis=1)
@@ -254,7 +261,11 @@ class Mapper:
         data = self.__transformToCameraLink(data)
         data = self.data_filtering.filter(data)
 
-        transformation_matrix = self.__publishTransformation(data)
+        transformation_matrix = self.__publishTransformation(data)  # get to not rotated hand coordinates
+        if self.transformation_to_origin_from_demo is None:
+            self.transformation_to_origin_from_demo[0:3, 3] = -transformation_matrix[0:3, 3]
+        transformation_matrix = self.inverse_start_transformation_base @ self.transformation_to_origin_from_demo @\
+                                transformation_matrix  # in rotated hand coordinates with shift of origin
         data = self.__transformDataWithTransform(data, transformation_matrix)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
         inverse_transformation_matrix = self.__setHandPosition(transformation_matrix=transformation_matrix)
