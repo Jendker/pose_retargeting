@@ -11,7 +11,7 @@ class FPSCounter:
         self.last_time = current_time
         self.x = 5  # displays the frame rate every X second
         self.time_between_calls = []
-        self.elements_for_mean = 20
+        self.elements_for_mean = 50
 
     def getAndPrintFPS(self, print_fps=True):
         current_time = time.time()
