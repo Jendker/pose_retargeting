@@ -55,7 +55,7 @@ class Mapper:
         self.scaler = Scaler(self.simulator)
         logger.info("Pose mapping initialization finished.")
 
-        self.PSO = PSO()
+        self.PSO = PSO(self.simulator)
 
     def __euclideanTransformation(self, rotation_matrix, transformation_vector):
         top = np.concatenate((rotation_matrix, transformation_vector[:, np.newaxis]), axis=1)
