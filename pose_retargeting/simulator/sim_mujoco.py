@@ -270,5 +270,11 @@ class Mujoco(Simulator):
             except (AttributeError, TypeError):
                 pass
 
+    def getAllJointPositions(self):
+        return self.data.qpos[:-6]
+
     def getAllJointNames(self):
         return self.model.joint_names[:-6]
+
+    def getGraspSidePosition(self):
+        return self.model.site_name2id('S_grasp')
