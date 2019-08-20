@@ -21,5 +21,5 @@ class ForwardKinematics:
         body = self.plant.GetBodyByName(body_name)
         return np.array(self.plant.EvalBodyPoseInWorld(self.context, body))
 
-    def getWorkdBodyPosition(self, transformation_matrix, body_name):
+    def getWorldBodyPosition(self, transformation_matrix, body_name):
         return (transformation_matrix @ np.append(self.getLocalBodyPosition(body_name), 1))[0:3]
