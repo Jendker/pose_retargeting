@@ -57,8 +57,8 @@ class Mapper:
         logger.info("Pose mapping initialization finished.")
 
         self.PSO = PSO(self.simulator)
-        self.start_rotation_base = self.simulator.getHandBaseRotationMatrix.reshape((3, 3)).copy()
-        self.translation_base = self.simulator.getHandBasePosition.copy()
+        self.start_rotation_base = self.simulator.getHandBaseRotationMatrix().copy()
+        self.translation_base = self.simulator.getHandBasePosition().copy()
         self.inverse_start_transformation_base = euclideanTransformation(self.start_rotation_base.T,
                                                                          -self.start_rotation_base.T
                                                                          @ self.translation_base)

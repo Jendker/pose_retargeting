@@ -280,7 +280,7 @@ class Mujoco(Simulator):
         return self.model.site_name2id('S_grasp')
 
     def getHandBaseRotationMatrix(self):
-        return self.data.body_xmat[self.hand_base_index]
+        return self.data.body_xmat[self.hand_base_index].reshape((3, 3))
 
     def getHandBasePosition(self):
         return self.data.body_xpos[self.hand_base_index]
