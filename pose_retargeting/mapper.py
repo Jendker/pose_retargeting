@@ -263,6 +263,7 @@ class Mapper:
 
         transformation_matrix = self.__publishTransformation(data)  # get to not rotated hand coordinates
         if self.transformation_to_origin_from_demo is None:
+            self.transformation_to_origin_from_demo = np.identity(4)
             self.transformation_to_origin_from_demo[0:3, 3] = -transformation_matrix[0:3, 3]
         transformation_matrix = self.inverse_start_transformation_base @ self.transformation_to_origin_from_demo @\
                                 transformation_matrix  # in rotated hand coordinates with shift of origin
