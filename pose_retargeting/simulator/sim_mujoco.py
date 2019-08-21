@@ -88,6 +88,9 @@ class Mujoco(Simulator):
     def clampActions(self, actions):
         return (actions - self.act_mid) / self.act_rng
 
+    def unclampActions(self, actions):
+        return actions * self.act_rng + self.act_mid
+
     @staticmethod
     def quat2euler(quat):
         return rotations.quat2euler(quat)
