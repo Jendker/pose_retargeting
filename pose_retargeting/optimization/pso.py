@@ -80,5 +80,5 @@ class PSO:
     
     def new_taget_pose(self, new_target_fingers_pose, target_position, target_quaternion):
         self.target_joints_pose = new_target_fingers_pose
-        shift_from_falling = np.array([0, 0, -0.078])
+        shift_from_falling = np.array([0, 0, -0.075])
         self._setHandTargetPositionAndQuaternion(target_position + shift_from_falling, target_quaternion)
