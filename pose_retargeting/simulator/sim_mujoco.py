@@ -18,7 +18,7 @@ def euclideanTransformation(rotation_matrix, transformation_vector):
 
 
 class Mujoco(Simulator):
-    def __init__(self, env, env_name, no_translation=False, visualisation=False):
+    def __init__(self, env, env_name, visualisation=False):
         super().__init__()
         self.type = SimulatorType.MUJOCO
         self.visualisation = visualisation
@@ -31,17 +31,13 @@ class Mujoco(Simulator):
         self.data = self.env.data
         self.env_name = env_name
 
-        self.translate_hand_position = np.array([-0.8, 0, 0])
-        if no_translation:
-            self.translate_hand_position = np.zeros(3)
         self.limits_hand_orientation = ((-3.14, 3.14), (-4.71, 1.57), (-4.71, 1.57))
 
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
         self.hand_base_index = self.model.body_names.index(self.hand_base_name)
-        self.hand_target_position = -self.translate_hand_position  # neutralize the translation
-        self.hand_target_orientation = self.quat2euler(  # here euler because we set action as euler
-            self.getObjectIndexQuaternion(self.hand_base_index))
+        self.hand_target_position = np.array([0, 0, 0])
+        self.hand_target_orientation = np.array([0, 0, 0])  # here euler because we set action angle with euler
         self.scaling_points_knuckles = self.__getKnucklesPositions()
         self.transformation_hand_points = [self.scaling_points_knuckles[0], self.scaling_points_knuckles[1],
                                            self.scaling_points_knuckles[2], np.array([-0.011, -0.005, 0.271])]
@@ -227,10 +223,6 @@ class Mujoco(Simulator):
                 new_angles[i] -= 3.1416 * 2
         return new_angles
 
-    def updateHandPosition(self, old_position):
-        return 1 * (old_position + self.translate_hand_position)
-        # multiplication by constant to increase sensitivity
-
     @staticmethod
     def inverseUpdateHandPosition(old_position):
         new_position = old_position.copy()
@@ -238,7 +230,7 @@ class Mujoco(Simulator):
         return new_position
 
     def getHandBaseAction(self):
-        return np.concatenate((self.updateHandPosition(self.hand_target_position),
+        return np.concatenate((self.hand_target_position,
                                self.applyLimitsOfOrientation(self.hand_target_orientation)))
 
     def getNumberOfJoints(self):
@@ -250,9 +242,6 @@ class Mujoco(Simulator):
 
     def getJointIndexVelocity(self, index):
         return self.data.qvel[index]
-
-    def getShiftTransformation(self):
-        return np.identity(4)  # no shift necessary
 
     def getJointLimits(self, body_name):
         idx = self.getJointIndex(body_name)

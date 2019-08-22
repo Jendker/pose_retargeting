@@ -80,18 +80,6 @@ class Mapper:
         data_return.header.stamp = rospy.Time.now()
         return data_return
 
-    def __returnTransformation(self, data, inverse_transformation_matrix):
-        points_return = []
-        for point in data.joints_position:
-            vector_transformed = np.linalg.multi_dot([self.simulator.getShiftTransformation(),
-                                                      inverse_transformation_matrix, np.append(point, [1])])[0:3]\
-                                 # shift to keep hand in target area
-            points_return.append(vector_transformed)
-        data_return = data
-        data_return.joints_position = points_return
-        data_return.header.frame_id = self.camera_frame_name
-        return data_return
-
     def __getPositionVectorForDataIndex(self, data, index):
         joint = data.joints_position[index]
         position = [joint.x, joint.y, joint.z]
@@ -211,18 +199,11 @@ class Mapper:
             point_cloud.points.append(pc_point)
         self.points_pub.publish(point_cloud)
 
-    def __setHandPosition(self, transformation_matrix=None, hand_data=None):
-        if transformation_matrix is not None:
-            inverse_rotation_matrix = np.linalg.inv(transformation_matrix[0:3, 0:3])
-            translation = transformation_matrix[0:3, 3]
-            inverse_translation = -np.dot(inverse_rotation_matrix, translation)
-            inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
-            shifted_inverse_transformation_matrix = np.dot(self.simulator.getShiftTransformation(),
-                                                           inverse_transformation_matrix)  # shift to keep in target area
-            new_hand_quaternion = self.simulator.mat2quat(shifted_inverse_transformation_matrix)
-            new_hand_position = shifted_inverse_transformation_matrix[0:3, 3]
+    def __setHandPosition(self, inverse_transformation_matrix=None, hand_data=None):
+        if inverse_transformation_matrix is not None:
+            new_hand_quaternion = self.simulator.mat2quat(inverse_transformation_matrix)
+            new_hand_position = inverse_transformation_matrix[0:3, 3]
             self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
-            return inverse_transformation_matrix
         else:
             assert(hand_data.size == 7)
             self.simulator.setHandTargetPositionAndQuaternion(hand_data[:3], hand_data[3:])
@@ -255,6 +236,20 @@ class Mapper:
             ret[i, :] = data.joints_position[i]
         return ret
 
+    def __transformTransformationMatrix(self, transformation_matrix):
+        inverse_rotation_matrix = np.linalg.inv(transformation_matrix[0:3, 0:3])
+        translation = transformation_matrix[0:3, 3]
+        inverse_translation = -np.dot(inverse_rotation_matrix, translation)
+        inverse_transformation_matrix = self.__euclideanTransformation(inverse_rotation_matrix, inverse_translation)
+        if self.transformation_to_origin_from_demo is None:
+            self.transformation_to_origin_from_demo = np.identity(4)
+            self.transformation_to_origin_from_demo[0:3, 3] = -inverse_transformation_matrix[0:3, 3]\
+                                                              + np.array([0, 0, 0.25])
+        new_transformation_matrix = self.inverse_start_transformation_base @ self.transformation_to_origin_from_demo @ \
+                                    inverse_transformation_matrix  # in rotated hand coordinates with shift of origin
+                                                                   # to place where hand was on the beginning of demo
+        return new_transformation_matrix
+
     def callback(self, data):
         if self.using_left_hand:
             data = self.__mirrorData(data)
@@ -262,14 +257,10 @@ class Mapper:
         data = self.data_filtering.filter(data)
 
         transformation_matrix = self.__publishTransformation(data)  # get to not rotated hand coordinates
-        if self.transformation_to_origin_from_demo is None:
-            self.transformation_to_origin_from_demo = np.identity(4)
-            self.transformation_to_origin_from_demo[0:3, 3] = -transformation_matrix[0:3, 3]
-        transformation_matrix = self.inverse_start_transformation_base @ self.transformation_to_origin_from_demo @\
-                                transformation_matrix  # in rotated hand coordinates with shift of origin
         data = self.__transformDataWithTransform(data, transformation_matrix)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
-        inverse_transformation_matrix = self.__setHandPosition(transformation_matrix=transformation_matrix)
+        inverse_transformation_matrix = self.__transformTransformationMatrix(transformation_matrix)
+        self.__setHandPosition(inverse_transformation_matrix=inverse_transformation_matrix)
         # self.__publishMarkers(data, inverse_transformation_matrix)  # to visualize results
         # self.publishNewPointCloud(data)  # to visualize results
         data = self.__unPackHandPointsMatrix(data)

@@ -99,7 +99,7 @@ class VRep(Simulator):
         self.setObjectQuaternion(self.hand_base_target_handle, -1, target_quaternion.tolist())
 
     def getHandTargetPositionAndQuaternion(self):
-        return self.hand_target_position, self.hand_target_orientation
+        return self.hand_target_position + self.shift_translation, self.hand_target_orientation
 
     def removeObject(self, handle):
         vrep.simxRemoveObject(self.clientID, handle, vrep.simx_opmode_blocking)
@@ -130,9 +130,6 @@ class VRep(Simulator):
 
     def getJointIndexPosition(self, index):
         return 0  # not needed, just return 0
-
-    def getShiftTransformation(self):
-        return euclideanTransformation(np.identity(3), self.shift_translation)
 
     @staticmethod
     def quat2euler(quat):
