@@ -199,15 +199,8 @@ class Mapper:
             point_cloud.points.append(pc_point)
         self.points_pub.publish(point_cloud)
 
-    def __setHandPosition(self, inverse_transformation_matrix=None, hand_data=None):
-        if inverse_transformation_matrix is not None:
-            new_hand_quaternion = self.simulator.mat2quat(inverse_transformation_matrix)
-            new_hand_position = inverse_transformation_matrix[0:3, 3]
-            self.simulator.setHandTargetPositionAndQuaternion(new_hand_position, new_hand_quaternion)
-        else:
-            assert(hand_data.size == 7)
-            self.simulator.setHandTargetPositionAndQuaternion(hand_data[:3], hand_data[3:])
-
+    def __setHandPosition(self, position, quaternion):
+        self.simulator.setHandTargetPositionAndQuaternion(position, quaternion)
 
     def __transformToCameraLink(self, data):
         target_frame = self.camera_frame_name
@@ -236,6 +229,11 @@ class Mapper:
             ret[i, :] = data.joints_position[i]
         return ret
 
+    def _getHandBasePosRotFromTransformationMatrix(self, transformation_matrix):
+        hand_position = transformation_matrix[0:3, 3]
+        hand_quaternion = self.simulator.mat2quat(transformation_matrix)
+        return hand_position, hand_quaternion
+
     def __transformTransformationMatrix(self, transformation_matrix):
         inverse_rotation_matrix = np.linalg.inv(transformation_matrix[0:3, 0:3])
         translation = transformation_matrix[0:3, 3]
@@ -259,15 +257,16 @@ class Mapper:
         transformation_matrix = self.__publishTransformation(data)  # get to not rotated hand coordinates
         data = self.__transformDataWithTransform(data, transformation_matrix)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
-        inverse_transformation_matrix = self.__transformTransformationMatrix(transformation_matrix)
-        self.__setHandPosition(inverse_transformation_matrix=inverse_transformation_matrix)
+        new_transformation_matrix = self.__transformTransformationMatrix(transformation_matrix)
+        position, quaternion = self._getHandBasePosRotFromTransformationMatrix(new_transformation_matrix)
+        self.__setHandPosition(position, quaternion)
         # self.__publishMarkers(data, inverse_transformation_matrix)  # to visualize results
         # self.publishNewPointCloud(data)  # to visualize results
         data = self.__unPackHandPointsMatrix(data)
         self.hand.newPositionFromHPE(data)
 
     def newHandPointsData(self, data):
-        self.__setHandPosition(hand_data=data['base_pose'])
+        self.__setHandPosition(position=data['base_pose'][0:3], quaternion=data['base_pose'][3:])
         self.hand.newPositionFromHPE(data['finger_points'])
 
     def getControlOnce(self):
