@@ -55,7 +55,7 @@ class JointHandlesDict:
             self.body_joint_pairs_dict = dict(zip(body_names, joint_names))
             self.HPE_index_equivalent_bodies = [self.body_handles_dict[x] for x in HPE_index_equivalent_handles]
             if simulator is not None:
-                self.HPE_index_equivalent_body_indices = [simulator.model.body_name2id(x) for x
+                self.HPE_index_equivalent_body_indices = [simulator.env.model.body_name2id(x) for x
                                                           in self.HPE_index_equivalent_bodies]
 
         elif simulator.type == SimulatorType.VREP:

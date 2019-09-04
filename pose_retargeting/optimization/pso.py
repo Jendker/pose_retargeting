@@ -55,6 +55,16 @@ class PSO:
         # weights hand pose energy
         self.weights = Weights(self.bodies_for_hand_pose_energy_position)
 
+        # environments for parallel workers
+        envs = [GymEnv(mujoco_env.env_name) for i in range(self.num_cpu)]
+        for env in envs:
+            env.reset()
+        self.sims_mujoco = [Mujoco(envs[i], mujoco_env.env_name) for i in range(self.num_cpu)]
+
+    @staticmethod
+    def list_slice(S, step):
+        return [S[i::step] for i in range(step)]
+
     def optimize(self, actions, mujoco_env):
         unclamped_action = mujoco_env.unclampActions(actions.copy())
         # create particles
@@ -62,11 +72,9 @@ class PSO:
                           for _ in range(0, self.n_particles)]
         simulator_state = mujoco_env.env.gs()
 
-        def list_slice(S, step):
-            return [S[i::step] for i in range(step)]
-        split_particles = list_slice(self.particles, self.num_cpu)
-        arguments = [[particles, mujoco_env.env_name, simulator_state] for particles in
-                     split_particles]
+        split_particles = self.list_slice(self.particles, self.num_cpu)
+        arguments = [[particles, simulator_state, self.sims_mujoco[index]] for index, particles in
+                     enumerate(split_particles)]
         for i in range(0, self.iteration_count):
             fitness_results = np.array(self._try_multiprocess(arguments, 1000000, 4))
             lowest_batch_index = fitness_results.argmin()
@@ -116,7 +124,7 @@ class PSO:
 
     def getHandPoseEnergyPosition(self, particle):
         energy = 0
-        evaluated_hand_position = particle.sim.simulationObjectsPoseList(self.bodies_for_hand_pose_energy_position)
+        evaluated_hand_position = particle.env.simulationObjectsPoseList(self.bodies_for_hand_pose_energy_position)
         for index, (target_pose, eval_hand_pose) in enumerate(
                 zip(self.target_joints_pose, evaluated_hand_position)):
             energy += self.weights.pose_weights[index] * np.linalg.norm(target_pose - eval_hand_pose)
@@ -138,7 +146,7 @@ class PSO:
                     previous_index]
                 next_vector_target = self.target_joints_pose[next_index] - self.target_joints_pose[this_point_index]
                 target_angles.append(np.arccos(np.dot(next_vector_target, previous_vector_target)))
-                evaluated_joint_positions.append(particle.sim.getJointPosition(self.bodies_for_hand_pose_energy_angles[
+                evaluated_joint_positions.append(particle.env.getJointPosition(self.bodies_for_hand_pose_energy_angles[
                     this_point_index])[1])
         target_angles = np.array(target_angles)
         evaluated_joint_positions = np.array(evaluated_joint_positions)
@@ -151,16 +159,13 @@ class PSO:
     def getTaskEnergy(self, particle):
         return 0
 
-    def batchParticlesGeneration(self, particles, env_name, starting_sim_state):
-        env = GymEnv(env_name)
-        sim_mujoco = Mujoco(env, env_name)
+    def batchParticlesGeneration(self, particles, starting_sim_state, env):
         energies = []
         for particle in particles:
             particle.updatePositionAndVelocity()
             # TODO: Is this order ok?
-            particle.simulationStep(sim_mujoco, starting_sim_state)
+            particle.simulationStep(env, starting_sim_state)
             energies.append(self.fitness(particle))
-        del sim_mujoco
         return energies
 
     def fitness(self, particle):

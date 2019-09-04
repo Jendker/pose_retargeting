@@ -27,15 +27,13 @@ class Mujoco(Simulator):
         except AttributeError:
             self.env = env.env
         self.last_observations = []
-        self.model = self.env.model
-        self.data = self.env.data
         self.env_name = env_name
 
         self.limits_hand_orientation = ((-3.14, 3.14), (-4.71, 1.57), (-4.71, 1.57))
 
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
-        self.hand_base_index = self.model.body_names.index(self.hand_base_name)
+        self.hand_base_index = self.env.model.body_names.index(self.hand_base_name)
         self.hand_target_position = np.array([0, 0, 0])
         self.hand_target_orientation = np.array([0, 0, 0])  # here euler because we set action angle with euler
         self.scaling_points_knuckles = self.__getKnucklesPositions()
@@ -45,8 +43,8 @@ class Mujoco(Simulator):
             self.scheduler = sched.scheduler(time.time, time.sleep)
             setup_viewer_thread = threading.Thread(target=self.__setupViewer)
             setup_viewer_thread.start()
-        self.act_mid = np.mean(self.model.actuator_ctrlrange, axis=1)
-        self.act_rng = 0.5*(self.model.actuator_ctrlrange[:,1]-self.model.actuator_ctrlrange[:,0])
+        self.act_mid = np.mean(self.env.model.actuator_ctrlrange, axis=1)
+        self.act_rng = 0.5*(self.env.model.actuator_ctrlrange[:,1]-self.env.model.actuator_ctrlrange[:,0])
 
     def __setupViewer(self):
         try:
@@ -65,20 +63,20 @@ class Mujoco(Simulator):
 
     def __getInverseTransformationMatrixToBase(self):
         """Returns transformation from world to hand base coordinate system"""
-        rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
-        translation = self.data.body_xpos[self.hand_base_index]
+        rotation_matrix = self.env.data.body_xmat[self.hand_base_index].reshape((3, 3))
+        translation = self.env.data.body_xpos[self.hand_base_index]
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
 
     def getTransformationMatrixToBase(self):
         """Returns transformation from hand base coordinate system to world coordinate system"""
-        rotation_matrix = self.data.body_xmat[self.hand_base_index].reshape((3, 3))
-        translation = self.data.body_xpos[self.hand_base_index]
+        rotation_matrix = self.env.data.body_xmat[self.hand_base_index].reshape((3, 3))
+        translation = self.env.data.body_xpos[self.hand_base_index]
         return euclideanTransformation(rotation_matrix, translation)
 
     def __getInverseTransformationMatrix(self, handle):
-        idx = self.model.body_names.index(handle)
-        rotation_matrix = self.data.body_xmat[idx].reshape((3, 3))
-        translation = self.data.body_xpos[idx]
+        idx = self.env.model.body_names.index(handle)
+        rotation_matrix = self.env.data.body_xmat[idx].reshape((3, 3))
+        translation = self.env.data.body_xpos[idx]
         return euclideanTransformation(rotation_matrix.T, np.dot(-rotation_matrix.T, translation))
 
     def clampActions(self, actions):
@@ -127,27 +125,27 @@ class Mujoco(Simulator):
         current_pos = []
         inverse_transformation_matrix = self.__getInverseTransformationMatrixToBase()
         for body_name in body_names:
-            idx = self.model.body_names.index(body_name)
-            this_current_pos = self.data.body_xpos[idx]
+            idx = self.env.model.body_names.index(body_name)
+            this_current_pos = self.env.data.body_xpos[idx]
             current_pos.append(np.dot(inverse_transformation_matrix, np.append(this_current_pos, [1]))[0:3])
         return current_pos
 
     def getJointPosition(self, body_name, mode=VRepMode.BUFFER):
         if mode != VRepMode.BUFFER and mode != VRepMode.BLOCKING:
             return
-        idx = self.model.joint_names.index(self.getBodyJointName(body_name))
-        return [True, self.data.qpos[idx]]
+        idx = self.env.model.joint_names.index(self.getBodyJointName(body_name))
+        return [True, self.env.data.qpos[idx]]
 
     def getJointIndexPosition(self, index):
-        assert (len(self.data.qpos) == len(self.data.qvel))  # need to make sure, for some envs this is not the same
-        return self.data.qpos[index]
+        assert (len(self.env.data.qpos) == len(self.env.data.qvel))  # need to make sure, for some envs this is not the same
+        return self.env.data.qpos[index]
 
     def getJointNamePosition(self, joint_name):
-        idx = self.model.joint_names.index(joint_name)
-        return self.data.qpos[idx]
+        idx = self.env.model.joint_names.index(joint_name)
+        return self.env.data.qpos[idx]
 
     def getObjectPosition(self, body_name, parent_handle, **kwargs):
-        idx = self.model.body_names.index(body_name)
+        idx = self.env.model.body_names.index(body_name)
         return self.getObjectIndexPosition(idx, parent_handle)
 
     def getObjectPositionWithReturn(self, handle, parent_handle, mode=None):
@@ -156,7 +154,7 @@ class Mujoco(Simulator):
     def getObjectIndexPosition(self, index, parent_handle, mode=None):
         if mode == VRepMode.STREAMING:
             return None
-        current_pos = self.data.body_xpos[index]
+        current_pos = self.env.data.body_xpos[index]
         if parent_handle == -1:
             return current_pos
         else:
@@ -172,8 +170,8 @@ class Mujoco(Simulator):
                 raise NotImplementedError
         except KeyError:
             pass
-        idx = self.model.body_names.index(handle)
-        return self.data.body_xquat[idx]
+        idx = self.env.model.body_names.index(handle)
+        return self.env.data.body_xquat[idx]
 
     def setObjectQuaternion(self, handle, parent_handle, quaternion_to_set):
         raise NotImplementedError  # not needed
@@ -184,7 +182,7 @@ class Mujoco(Simulator):
                 raise NotImplementedError
         except KeyError:
             pass
-        return self.data.body_xquat[index]
+        return self.env.data.body_xquat[index]
 
     def setJointTargetVelocity(self, handle, velocity, disable_warning_on_no_connection):
         raise NotImplementedError
@@ -203,10 +201,10 @@ class Mujoco(Simulator):
         return None
 
     def getJointIndex(self, body_name):
-        return self.model.joint_names.index(self.getBodyJointName(body_name))
+        return self.env.model.joint_names.index(self.getBodyJointName(body_name))
 
     def getJointNameIndex(self, joint_name):
-        return self.model.joint_names.index(joint_name)
+        return self.env.model.joint_names.index(joint_name)
 
     def getBodyJointName(self, body_name):
         return self.joint_handles_dict.getBodyJointName(body_name)
@@ -215,7 +213,7 @@ class Mujoco(Simulator):
         return self.joint_handles_dict.getHPEIndexEquivalentBody(index)
 
     def getJacobianFromBodyName(self, body_name):
-        return self.data.get_body_jacp(body_name).reshape(3, -1)
+        return self.env.data.get_body_jacp(body_name).reshape(3, -1)
 
     def applyLimitsOfOrientation(self, old_angles):
         new_angles = old_angles.copy()
@@ -237,14 +235,14 @@ class Mujoco(Simulator):
                                self.applyLimitsOfOrientation(self.hand_target_orientation)))
 
     def getNumberOfJoints(self):
-        return self.data.ctrl.size
+        return self.env.data.ctrl.size
 
     def getJointNameVelocity(self, joint_name):
-        idx = self.model.joint_names.index(joint_name)
-        return self.data.qvel[idx]
+        idx = self.env.model.joint_names.index(joint_name)
+        return self.env.data.qvel[idx]
 
     def getJointIndexVelocity(self, index):
-        return self.data.qvel[index]
+        return self.env.data.qvel[index]
 
     def getJointLimits(self, body_name):
         idx = self.getJointIndex(body_name)
@@ -266,16 +264,16 @@ class Mujoco(Simulator):
                 pass
 
     def getAllJointPositions(self):
-        return self.data.qpos[:-6]
+        return self.env.data.qpos[:-6]
 
     def getAllJointNames(self):
-        return self.model.joint_names[:-6]
+        return self.env.model.joint_names[:-6]
 
     def getGraspSidePosition(self):
-        return self.model.site_name2id('S_grasp')
+        return self.env.model.site_name2id('S_grasp')
 
     def getHandBaseRotationMatrix(self):
-        return self.data.body_xmat[self.hand_base_index].reshape((3, 3))
+        return self.env.data.body_xmat[self.hand_base_index].reshape((3, 3))
 
     def getHandBasePosition(self):
-        return self.data.body_xpos[self.hand_base_index]
+        return self.env.data.body_xpos[self.hand_base_index]
