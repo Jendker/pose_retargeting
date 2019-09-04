@@ -72,12 +72,10 @@ class PSO:
             particles_count += 1
         self.split_particles = tuple(self.split_particles)
 
-    def initializeParticles(self, actions, mujoco_env, simulator_state):
-        print("initializing particles")
-        unclamped_action = mujoco_env.unclampActions(actions.copy())
+    def initializeParticles(self, actions, simulator_state):
         for particles in self.split_particles:
             for particle in particles:
-                particle.initializePosition(unclamped_action, simulator_state)
+                particle.initializePosition(actions, simulator_state)
         fitness_results = np.array(self._try_multiprocess(self.split_particles, 1000, 4,
                                                           self.batchParticlesInitialization))
         lowest_batch_index = fitness_results.argmin()
@@ -93,7 +91,7 @@ class PSO:
     def optimize(self, actions, mujoco_env):
         simulator_state = mujoco_env.env.gs()
 
-        self.initializeParticles(actions, mujoco_env, simulator_state)
+        self.initializeParticles(actions, simulator_state)
 
         for i in range(0, self.iteration_count):
             fitness_results = np.array(self._try_multiprocess(self.split_particles, 1000, 4,
