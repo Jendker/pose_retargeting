@@ -211,6 +211,9 @@ class Mujoco(Simulator):
     def getBodyJointName(self, body_name):
         return self.joint_handles_dict.getBodyJointName(body_name)
 
+    def getHPEIndexEquivalentBody(self, index):
+        return self.joint_handles_dict.getHPEIndexEquivalentBody(index)
+
     def getJacobianFromBodyName(self, body_name):
         return self.data.get_body_jacp(body_name).reshape(3, -1)
 

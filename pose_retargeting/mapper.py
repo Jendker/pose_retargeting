@@ -263,11 +263,15 @@ class Mapper:
         # self.__publishMarkers(data, inverse_transformation_matrix)  # to visualize results
         # self.publishNewPointCloud(data)  # to visualize results
         data = self.__unPackHandPointsMatrix(data)
-        self.hand.newPositionFromHPE(data)
+        self._newPositionFromHPE(data, position, quaternion)
 
     def newHandPointsData(self, data):
         self.__setHandPosition(position=data['base_pose'][0:3], quaternion=data['base_pose'][3:])
-        self.hand.newPositionFromHPE(data['finger_points'])
+        self._newPositionFromHPE(data['finger_points'], data['base_pose'][0:3], data['base_pose'][3:])
+
+    def _newPositionFromHPE(self, data, position, quaternion):
+        self.hand.newPositionFromHPE(data)
+        self.PSO.new_taget_pose(data, position, quaternion)
 
     def getControlOnce(self):
         frequency = self.FPSCounter.getAndPrintFPS()
@@ -276,7 +280,7 @@ class Mapper:
     def getClampedControlOnce(self):
         frequency = self.FPSCounter.getAndPrintFPS()
         actions = self.hand.getControlOnce(frequency)
-        self.PSO.optimize(actions, frequency)
+        actions = self.PSO.optimize(actions, self.simulator)
         return self.simulator.clampActions(actions)
 
     def __executeInverseOnce(self):
