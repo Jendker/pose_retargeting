@@ -29,7 +29,7 @@ class Mujoco(Simulator):
         self.last_observations = []
         self.env_name = env_name
 
-        self.limits_hand_orientation = ((-3.14, 3.14), (-4.71, 1.57), (-4.71, 1.57))
+        self.limits_hand_orientation = ((-3.14, 3.14), (-3.14, 3.14), (-3.14, 3.14))
 
         self.joint_handles_dict = JointHandlesDict(self)
         self.hand_base_name = self.getHandle('ShadowRobot_base_tip')
