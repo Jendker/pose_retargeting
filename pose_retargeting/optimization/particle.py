@@ -5,7 +5,7 @@ class Particle:
         self.best_position = position
         self.parameters = parameters
         self.personal_best = float("inf")
-        self.env = None
+        self.sim_mujoco = None
 
         global_orient_std = 5/180 * np.pi
         finger_std = 15/180 * np.pi
@@ -25,8 +25,8 @@ class Particle:
     def updateGlobalBest(self, global_best_position):
         self.global_best_position = global_best_position
 
-    def simulationStep(self, env, initial_state):
-        if self.env is None:
-            self.env = env
-        self.env.env.ss(initial_state)
-        self.env.env.step(self.position)
+    def simulationStep(self, sim_mujoco, initial_state):
+        if self.sim_mujoco is None:
+            self.sim_mujoco = sim_mujoco
+        self.sim_mujoco.env.ss(initial_state)
+        self.sim_mujoco.env.step(self.position)
