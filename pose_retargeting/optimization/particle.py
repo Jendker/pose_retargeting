@@ -1,32 +1,58 @@
 import numpy as np
 
+
 class Particle:
-    def __init__(self, mujoco_env, position, parameters):
-        self.best_position = position
+    def __init__(self, mujoco_env, parameters, sim_mujoco_worker):
+        self.best_position = None
         self.parameters = parameters
         self.personal_best = float("inf")
-        self.sim_mujoco = None
+        self.sim_mujoco_worker = sim_mujoco_worker
 
-        global_orient_std = 5/180 * np.pi
-        finger_std = 15/180 * np.pi
-        global_trans_std = 0.02
-        init_std_dev = [global_orient_std, global_orient_std, global_orient_std, global_trans_std, global_trans_std, global_trans_std]
-        init_std_dev = np.pad(init_std_dev, (0, mujoco_env.getNumberOfJoints() - len(init_std_dev)), 'constant', constant_values=finger_std)
-        self.position = position + np.random.normal(position, init_std_dev)
-        self.velocity = np.zeros_like(self.position)
-        # self.global_best_position = position
-        self.global_best_position = np.zeros_like(self.best_position)
+        self.position = None
+        self.velocity = None
+        self.simulator_initial_state = None
+        self.global_best_position = None
+
+        self.actuator_count = mujoco_env.getNumberOfJoints()
+
+        global_orient_std = 5 / 180 * np.pi
+        finger_std = 15 / 180 * np.pi
+        global_trans_std = 0.03
+        init_action_range = [global_trans_std, global_trans_std, global_trans_std, global_orient_std, global_orient_std,
+                             global_orient_std]
+        self.init_action_range = np.pad(init_action_range, (0, self.actuator_count - len(init_action_range)), 'constant',
+                                                            constant_values=finger_std)
+        self.actions_upper_bound = mujoco_env.env.model.actuator_ctrlrange[:, 1]
+        self.actions_lower_bound = mujoco_env.env.model.actuator_ctrlrange[:, 0]
+        self.position_lower_bound = None
+        self.position_upper_bound = None
+        self.velocity_bound = None
+
+    def initializePosition(self, position, simulator_state):
+        self.simulator_initial_state = simulator_state
+        self.position_lower_bound = np.maximum(self.actions_lower_bound, position - self.init_action_range)
+        self.position_upper_bound = np.minimum(self.actions_upper_bound, position + self.init_action_range)
+        # if not np.all(self.position_upper_bound >= self.position_lower_bound):
+        #     error = 1
+        # assert np.all(self.position_upper_bound >= self.position_lower_bound)
+        self.velocity_bound = np.abs(self.position_upper_bound - self.position_lower_bound)
+        self.position = np.random.uniform(self.position_lower_bound, self.position_upper_bound)
+        self.best_position = self.position
+
+    def initializeVelocity(self):
+        self.velocity = np.random.uniform(-self.velocity_bound, self.velocity_bound)
 
     def updatePositionAndVelocity(self):
-        self.velocity = self.velocity + self.parameters['c1'] * (self.best_position - self.position) + \
-                        self.parameters['c2'] * (self.global_best_position - self.position)
-        self.position = self.position * self.velocity
+        self.velocity = self.velocity * self.parameters['omega']\
+            + self.parameters['c1'] * np.random.uniform(size=self.actuator_count) * (self.best_position - self.position)\
+            + self.parameters['c2'] * np.random.uniform(size=self.actuator_count) * (self.global_best_position - self.position)
+        self.velocity = np.clip(self.velocity, -self.velocity_bound, self.velocity_bound)
+        self.position = self.position + self.velocity
+        self.position = np.clip(self.position, self.position_lower_bound, self.position_upper_bound)
 
     def updateGlobalBest(self, global_best_position):
         self.global_best_position = global_best_position
 
-    def simulationStep(self, sim_mujoco, initial_state):
-        if self.sim_mujoco is None:
-            self.sim_mujoco = sim_mujoco
-        self.sim_mujoco.env.ss(initial_state)
-        self.sim_mujoco.env.step(self.position)
+    def simulationStep(self):
+        self.sim_mujoco_worker.env.ss(self.simulator_initial_state)
+        self.sim_mujoco_worker.env.step(self.position)
