@@ -96,6 +96,11 @@ class PSO:
         for i in range(0, self.iteration_count):
             fitness_results = np.array(self._try_multiprocess(self.split_particles, 1000, 4,
                                                               self.batchParticlesGeneration))
+            # update personal bests
+            for j in range(self.num_cpu):
+                for k in range(len(fitness_results[j])):
+                    self.split_particles[j][k].updatePersonalBest(fitness_results[j][k])
+
             lowest_batch_index = fitness_results.argmin()
             lowest_fitness = min(fitness_results[lowest_batch_index])
             if lowest_fitness < self.best_global_fitness:
@@ -113,24 +118,24 @@ class PSO:
         if max_timeouts == 0:
             return None
 
-        pool = Pool(processes=self.num_cpu, maxtasksperchild=1)
-        parallel_runs = [pool.apply_async(function,
-                                          args=(args_list[i],)) for i in range(self.num_cpu)]
-        try:
-            results = [p.get(timeout=max_process_time) for p in parallel_runs]
-        except Exception as e:
-            print(str(e))
-            print("Timeout Error raised... Trying again")
-            pool.close()
-            pool.terminate()
-            pool.join()
-            return self._try_multiprocess(args_list, max_process_time, max_timeouts - 1, function)
-        pool.close()
-        pool.terminate()
-        pool.join()
-        # results = []
-        # for i in range(self.num_cpu):
-        #     results.append(function(args_list[i]))
+        # pool = Pool(processes=self.num_cpu, maxtasksperchild=1)
+        # parallel_runs = [pool.apply_async(function,
+        #                                   args=(args_list[i],)) for i in range(self.num_cpu)]
+        # try:
+        #     results = [p.get(timeout=max_process_time) for p in parallel_runs]
+        # except Exception as e:
+        #     print(str(e))
+        #     print("Timeout Error raised... Trying again")
+        #     pool.close()
+        #     pool.terminate()
+        #     pool.join()
+        #     return self._try_multiprocess(args_list, max_process_time, max_timeouts - 1, function)
+        # pool.close()
+        # pool.terminate()
+        # pool.join()
+        results = []
+        for i in range(self.num_cpu):
+            results.append(function(args_list[i]))
         return results
 
     def _setHandTargetPositionAndQuaternion(self, target_position, target_quaternion):
@@ -146,7 +151,8 @@ class PSO:
         evaluated_hand_position = particle.sim_mujoco_worker.simulationObjectsPoseList(self.bodies_for_hand_pose_energy_position)
         for index, (target_pose, eval_hand_pose) in enumerate(
                 zip(self.target_joints_pose, evaluated_hand_position)):
-            energy += self.weights.pose_weights[index] * np.linalg.norm(target_pose - eval_hand_pose)
+            energy += self.weights.pose_weights[index] * np.linalg.norm(target_pose - eval_hand_pose)**2
+        # print("Position", energy / self.weights.sum_of_hand_pose_weights)
         return energy / self.weights.sum_of_hand_pose_weights
 
     def getHandPoseEnergyAngles(self, particle):
@@ -169,8 +175,9 @@ class PSO:
                     this_point_index])[1])
         target_angles = np.array(target_angles)
         evaluated_joint_positions = np.array(evaluated_joint_positions)
-
-        return np.linalg.norm((evaluated_joint_positions - target_angles) / np.pi) / len(evaluated_joint_positions)
+        mse = (((evaluated_joint_positions - target_angles) ** 2).mean(axis=None) / np.pi**2)
+        # print("Angles", mse)
+        return mse
 
     def getHandPoseEnergy(self, particle):
         return self.getHandPoseEnergyPosition(particle) + self.getHandPoseEnergyAngles(particle)

@@ -3,10 +3,11 @@ import numpy as np
 
 class Particle:
     def __init__(self, mujoco_env, parameters, sim_mujoco_worker):
-        self.best_position = None
         self.parameters = parameters
-        self.personal_best = float("inf")
         self.sim_mujoco_worker = sim_mujoco_worker
+
+        self.best_position = None
+        self.personal_best = float("inf")
 
         self.position = None
         self.velocity = None
@@ -38,6 +39,7 @@ class Particle:
         self.velocity_bound = np.abs(self.position_upper_bound - self.position_lower_bound)
         self.position = np.random.uniform(self.position_lower_bound, self.position_upper_bound)
         self.best_position = self.position
+        self.personal_best = float("inf")
 
     def initializeVelocity(self):
         self.velocity = np.random.uniform(-self.velocity_bound, self.velocity_bound)
@@ -52,6 +54,11 @@ class Particle:
 
     def updateGlobalBest(self, global_best_position):
         self.global_best_position = global_best_position
+
+    def updatePersonalBest(self, this_fitness):
+        if this_fitness < self.personal_best:
+            self.personal_best = this_fitness
+            self.best_position = self.position
 
     def simulationStep(self):
         self.sim_mujoco_worker.env.ss(self.simulator_initial_state)
