@@ -57,34 +57,34 @@ class PSO:
         self.sims_mujoco_workers = [Mujoco(envs[i], mujoco_env.env_name) for i in range(self.num_cpu)]
 
         # create particles
-        self.split_particles = [[] for i in range(self.num_cpu)]
+        self.particle_batches = [[] for i in range(self.num_cpu)]
         self.createParticles(mujoco_env)
 
     def createParticles(self, mujoco_env):
         particles_count = 0
         split_index = 0
         while particles_count < self.n_particles:
-            self.split_particles[split_index].append(Particle(mujoco_env,
-                                                              self.parameters, self.sims_mujoco_workers[split_index]))
+            self.particle_batches[split_index].append(Particle(mujoco_env,
+                                                               self.parameters, self.sims_mujoco_workers[split_index]))
             split_index += 1
             if split_index == self.num_cpu:
                 split_index = 0
             particles_count += 1
-        self.split_particles = tuple(self.split_particles)
+        self.particle_batches = tuple(self.particle_batches)
 
     def initializeParticles(self, actions, simulator_state):
-        for particles in self.split_particles:
-            for particle in particles:
+        for particles_batch in self.particle_batches:
+            for particle in particles_batch:
                 particle.initializePosition(actions, simulator_state)
-        fitness_results = np.array(self._try_multiprocess(self.split_particles, 1000, 4,
+        fitness_results = np.array(self._try_multiprocess(self.particle_batches, 1000, 4,
                                                           self.batchParticlesInitialization))
         lowest_batch_index = fitness_results.argmin()
         lowest_fitness = min(fitness_results[lowest_batch_index])
         self.best_global_fitness = lowest_fitness
         lowest_particle_index = fitness_results[lowest_batch_index].index(lowest_fitness)
-        best_particle_position = self.split_particles[lowest_batch_index][lowest_particle_index].position
-        for particles in self.split_particles:
-            for particle in particles:
+        best_particle_position = self.particle_batches[lowest_batch_index][lowest_particle_index].position
+        for particles_batch in self.particle_batches:
+            for particle in particles_batch:
                 particle.updateGlobalBest(best_particle_position)
                 particle.initializeVelocity()
 
@@ -94,22 +94,22 @@ class PSO:
         self.initializeParticles(actions, simulator_state)
 
         for i in range(0, self.iteration_count):
-            fitness_results = np.array(self._try_multiprocess(self.split_particles, 1000, 4,
+            fitness_results = np.array(self._try_multiprocess(self.particle_batches, 1000, 4,
                                                               self.batchParticlesGeneration))
             # update personal bests
             for j in range(self.num_cpu):
                 for k in range(len(fitness_results[j])):
-                    self.split_particles[j][k].updatePersonalBest(fitness_results[j][k])
+                    self.particle_batches[j][k].updatePersonalBest(fitness_results[j][k])
 
             lowest_batch_index = fitness_results.argmin()
             lowest_fitness = min(fitness_results[lowest_batch_index])
             if lowest_fitness < self.best_global_fitness:
                 lowest_particle_index = fitness_results[lowest_batch_index].index(lowest_fitness)
-                best_particle_position = self.split_particles[lowest_batch_index][lowest_particle_index].position
+                best_particle_position = self.particle_batches[lowest_batch_index][lowest_particle_index].position
                 self.best_global_fitness = lowest_fitness
                 self.best_particle_position = best_particle_position
-                for particles in self.split_particles:
-                    for particle in particles:
+                for particle_batch in self.particle_batches:
+                    for particle in particle_batch:
                         particle.updateGlobalBest(best_particle_position)
         return self.best_particle_position
 
@@ -182,21 +182,43 @@ class PSO:
     def getHandPoseEnergy(self, particle):
         return self.getHandPoseEnergyPosition(particle) + self.getHandPoseEnergyAngles(particle)
 
-    def getTaskEnergy(self, particle):
-        return 0
+    @staticmethod
+    def getTaskEnergy(particle):
+        missing_weight = 2
+        margin = 0.04
+        constant = 0.004
+        contact_dist = particle.getActiveContactsDist()
+        # add palm
+        palm_w = 3  # palm weight to make it more important than the rest of the tips (must be integer)
+        if contact_dist is not None and 12 in contact_dist:  # palm id
+            for i in range(palm_w - 1):
+                contact_dist[12 + (i + 1) * 100] = contact_dist[12]  # add identical palm entries for the mean
+        total = 5 + palm_w
+        if contact_dist is not None:
+            s = (total - len(contact_dist)) * missing_weight * (
+                        (margin + constant) ** 2)  # punish for those that are not even in range
+            for key in contact_dist:
+                # ideally the distance is less than zero, so add constant to make it positive
+                s += (max(max(contact_dist[key]) + constant,
+                          0)) ** 2  # we want it to be less than 0 so there applied force
+            # normalise
+            # coeff = (len(contact_dist) + (5 - len(contact_dist)) * missing_weight) * ((margin + constant) ** 2)
+            s /= (len(contact_dist) + (total - len(contact_dist)) * missing_weight) * ((margin + constant) ** 2)
+            return s
+        else:
+            return 1
 
-    def batchParticlesInitialization(self, particles):
+    def batchParticlesInitialization(self, particle_batch):
         energies = []
-        for particle in particles:
+        for particle in particle_batch:
             particle.simulationStep()
             energies.append(self.fitness(particle))
         return energies
 
-    def batchParticlesGeneration(self, particles):
+    def batchParticlesGeneration(self, particle_batch):
         energies = []
-        for particle in particles:
+        for particle in particle_batch:
             particle.updatePositionAndVelocity()
-            # TODO: Is this order ok?
             particle.simulationStep()
             energies.append(self.fitness(particle))
         return energies

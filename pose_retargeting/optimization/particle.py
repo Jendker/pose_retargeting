@@ -28,6 +28,20 @@ class Particle:
         self.position_lower_bound = None
         self.position_upper_bound = None
         self.velocity_bound = None
+        self.contact_pairs = self.getPairContacts()
+
+    def getPairContacts(self):
+        geom1 = self.sim_mujoco_worker.env.model.pair_geom1
+        geom2 = self.sim_mujoco_worker.env.model.pair_geom2
+        # TODO: group the geoms into bodies
+        pairs = {}
+        if geom1 is not None and geom2 is not None:
+            assert (len(geom1) == len(geom2))
+            # group geom2 by geom1
+            for elem in set(geom1):
+                tmp = [geom2[i] for i in np.where(np.asarray(geom1) == elem)[0]]
+                pairs[elem] = tmp
+        return pairs
 
     def initializePosition(self, position, simulator_state):
         self.simulator_initial_state = simulator_state
@@ -63,3 +77,21 @@ class Particle:
     def simulationStep(self):
         self.sim_mujoco_worker.env.ss(self.simulator_initial_state)
         self.sim_mujoco_worker.env.step(self.position)
+
+    def getActiveContactsDist(self, contact_pairs):
+        dist = {}
+        for geom1 in contact_pairs:
+            d1 = []
+            for coni in range(self.sim_mujoco_worker.env.data.ncon):
+                con = self.sim_mujoco_worker.env.data.contact[coni]
+                # get distances for all active contacts with geom1
+                # d1 = [data.contact[coni].dim for coni in range(data.ncon) if data.contact[coni].geom1 == geom1
+                #      and data.contact[coni].geom2 == geom2 for geom2 in np.where(np.asarray(contact_pairs(geom1)))[0]]
+                if (geom1 == con.geom1 and con.geom2 in contact_pairs[geom1]) \
+                        or (geom1 == con.geom2 and con.geom1 in contact_pairs[geom1]):
+                    # contact is in the pair list
+                    d1.append(con.dist)
+
+            if len(d1):
+                dist[geom1] = d1
+        return dist
