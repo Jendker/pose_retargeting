@@ -78,9 +78,9 @@ class Particle:
         self.sim_mujoco_worker.env.ss(self.simulator_initial_state)
         self.sim_mujoco_worker.env.step(self.position)
 
-    def getActiveContactsDist(self, contact_pairs):
+    def getActiveContactsDist(self):
         dist = {}
-        for geom1 in contact_pairs:
+        for geom1 in self.contact_pairs:
             d1 = []
             for coni in range(self.sim_mujoco_worker.env.data.ncon):
                 con = self.sim_mujoco_worker.env.data.contact[coni]
