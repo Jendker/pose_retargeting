@@ -2,7 +2,7 @@ import numpy as np
 
 
 class Particle:
-    def __init__(self, mujoco_env, parameters, sim_mujoco_worker):
+    def __init__(self, mujoco_env, parameters, sim_mujoco_worker, contact_pairs):
         self.parameters = parameters
         self.sim_mujoco_worker = sim_mujoco_worker
 
@@ -28,7 +28,7 @@ class Particle:
         self.position_lower_bound = None
         self.position_upper_bound = None
         self.velocity_bound = None
-        self.contact_pairs = self.getPairContacts()
+        self.contact_pairs = contact_pairs
 
     def getPairContacts(self):
         geom1 = self.sim_mujoco_worker.env.model.pair_geom1
@@ -87,8 +87,8 @@ class Particle:
                 # get distances for all active contacts with geom1
                 # d1 = [data.contact[coni].dim for coni in range(data.ncon) if data.contact[coni].geom1 == geom1
                 #      and data.contact[coni].geom2 == geom2 for geom2 in np.where(np.asarray(contact_pairs(geom1)))[0]]
-                if (geom1 == con.geom1 and con.geom2 in contact_pairs[geom1]) \
-                        or (geom1 == con.geom2 and con.geom1 in contact_pairs[geom1]):
+                if (geom1 == con.geom1 and con.geom2 in self.contact_pairs[geom1]) \
+                        or (geom1 == con.geom2 and con.geom1 in self.contact_pairs[geom1]):
                     # contact is in the pair list
                     d1.append(con.dist)
 

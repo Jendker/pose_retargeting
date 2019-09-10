@@ -59,13 +59,39 @@ class PSO:
         # create particles
         self.particle_batches = [[] for i in range(self.num_cpu)]
         self.createParticles(mujoco_env)
+        self.palm_max_index, self.palm_min_index = self.getMaxMinPalmGeomIndices(mujoco_env)
+
+    @staticmethod
+    def getMaxMinPalmGeomIndices(mujoco_env):
+        palm_geom_indices = []
+        for geom_name in mujoco_env.env.model.geom_names:
+            if 'palm_collision_' in geom_name:
+                palm_geom_indices.append(mujoco_env.env.model.geom_name2id(geom_name))
+        return max(palm_geom_indices), min(palm_geom_indices)
+
+    @staticmethod
+    def getPairContacts(mujoco_env):
+        geom1 = mujoco_env.env.model.pair_geom1
+        geom2 = mujoco_env.env.model.pair_geom2
+        # TODO: group the geoms into bodies
+        pairs = {}
+        if geom1 is not None and geom2 is not None:
+            assert (len(geom1) == len(geom2))
+            # group geom2 by geom1
+            for elem in set(geom1):
+                tmp = [geom2[i] for i in np.where(np.asarray(geom1) == elem)[0]]
+                pairs[elem] = tmp
+        return pairs
 
     def createParticles(self, mujoco_env):
         particles_count = 0
         split_index = 0
+
+        contact_pairs = self.getPairContacts(mujoco_env)
         while particles_count < self.n_particles:
             self.particle_batches[split_index].append(Particle(mujoco_env,
-                                                               self.parameters, self.sims_mujoco_workers[split_index]))
+                                                               self.parameters, self.sims_mujoco_workers[split_index],
+                                                               contact_pairs))
             split_index += 1
             if split_index == self.num_cpu:
                 split_index = 0
@@ -182,28 +208,42 @@ class PSO:
     def getHandPoseEnergy(self, particle):
         return self.getHandPoseEnergyPosition(particle) + self.getHandPoseEnergyAngles(particle)
 
-    @staticmethod
-    def getTaskEnergy(particle):
+    def getTaskEnergy(self, particle):
         missing_weight = 2
         margin = 0.04
         constant = 0.004
         contact_dist = particle.getActiveContactsDist()
         # add palm
         palm_w = 3  # palm weight to make it more important than the rest of the tips (must be integer)
-        if contact_dist is not None and 12 in contact_dist:  # palm id
-            for i in range(palm_w - 1):
-                contact_dist[12 + (i + 1) * 100] = contact_dist[12]  # add identical palm entries for the mean
-        total = 5 + palm_w
-        if contact_dist is not None:
-            s = (total - len(contact_dist)) * missing_weight * (
-                        (margin + constant) ** 2)  # punish for those that are not even in range
+        assert(isinstance(palm_w, int))
+        real_contact_distances = []
+        if contact_dist:
+            # find smallest distance for palm (we have many, many geoms currently for palm)
+            palm_distances = []
             for key in contact_dist:
+                # check if key (index) belongs to palm
+                if self.palm_max_index >= key >= self.palm_min_index:
+                    # if so, append
+                    palm_distances.append(contact_dist[key])
+                else:
+                    # it is finger, just add to to real_contact_dist
+                    real_contact_distances.append(contact_dist[key])
+            if palm_distances:
+                # only add the smallest palm distance to real_contact_dist for energy calculation
+                smallest_distance = min(palm_distances)
+                for i in range(palm_w - 1):
+                    real_contact_distances.append(smallest_distance)  # add identical palm entries for the mean
+        total = 5 + palm_w
+        if real_contact_distances:
+            s = (total - len(real_contact_distances)) * missing_weight * (
+                        (margin + constant) ** 2)  # punish for those that are not even in range
+            for distance in real_contact_distances:
                 # ideally the distance is less than zero, so add constant to make it positive
-                s += (max(max(contact_dist[key]) + constant,
+                s += (max(max(distance) + constant,
                           0)) ** 2  # we want it to be less than 0 so there applied force
             # normalise
             # coeff = (len(contact_dist) + (5 - len(contact_dist)) * missing_weight) * ((margin + constant) ** 2)
-            s /= (len(contact_dist) + (total - len(contact_dist)) * missing_weight) * ((margin + constant) ** 2)
+            s /= (len(real_contact_distances) + (total - len(real_contact_distances)) * missing_weight) * ((margin + constant) ** 2)
             return s
         else:
             return 1
