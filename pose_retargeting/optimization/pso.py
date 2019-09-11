@@ -24,8 +24,8 @@ class Weights:
         self.finger_geom_count = self.get_finger_geoms_count(mujoco_env)
         self.sum_of_task_energy_weights = self.palm_weight + self.finger_geom_count
 
-        self.minimum_distance = minimum_distance if minimum_distance is not None else 0.02
-        self.maximum_distance = maximum_distance if maximum_distance is not None else 0.08
+        self.minimum_distance = minimum_distance if minimum_distance is not None else 0.08
+        self.maximum_distance = maximum_distance if maximum_distance is not None else 0.2
 
     def update_weights(self, distance_between_hand_and_object):
         distance = np.clip(distance_between_hand_and_object, self.minimum_distance, self.maximum_distance)
@@ -33,8 +33,8 @@ class Weights:
         alpha = (distance - self.minimum_distance) / (self.maximum_distance - self.minimum_distance)
         self.weight_task_energy = self.min_weight_task_energy * alpha + self.max_weight_task_energy * (1 - alpha)
         weight_pose_energy = self.max_weight_hand_pose_energy * alpha + self.min_weight_hand_pose_energy * (1 - alpha)
-        self.weight_hand_pose_energy_position = weight_pose_energy * 0.75
-        self.weight_hand_pose_energy_angle = weight_pose_energy * 0.25
+        self.weight_hand_pose_energy_position = weight_pose_energy * 1
+        self.weight_hand_pose_energy_angle = weight_pose_energy * 0
 
     @staticmethod
     def get_finger_geoms_count(mujoco_env):
