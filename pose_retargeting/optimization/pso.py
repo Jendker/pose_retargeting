@@ -82,10 +82,7 @@ class PSO:
         self.weights = Weights(self.bodies_for_hand_pose_energy_position, mujoco_env)
 
         # environments for parallel workers
-        envs = [GymEnv(mujoco_env.env_name) for i in range(self.num_cpu)]
-        for env in envs:
-            env.reset()
-        self.sims_mujoco_workers = [Mujoco(envs[i], mujoco_env.env_name) for i in range(self.num_cpu)]
+        self.worker_pool = Pool(self.num_cpu, initializer=self.initialize_env, initargs=[mujoco_env.env_name])
 
         # create particles
         self.particle_batches = [[] for i in range(self.num_cpu)]
@@ -93,6 +90,11 @@ class PSO:
         self.palm_max_index, self.palm_min_index = self.getMaxMinPalmGeomIndices(mujoco_env)
         self.obj_body_index = mujoco_env.env.model.body_name2id('Object')
         self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
+
+    def __del__(self):
+        self.worker_pool.close()
+        self.worker_pool.terminate()
+        self.worker_pool.join()
 
     @staticmethod
     def getMaxMinPalmGeomIndices(mujoco_env):
@@ -121,15 +123,20 @@ class PSO:
         palm_pos = mujoco_env.env.data.site_xpos[self.grasp_site_index].ravel()
         return np.linalg.norm(obj_pos - palm_pos)
 
+    @staticmethod
+    def initialize_env(env_name):
+        env = GymEnv(env_name)
+        env.reset()
+        global sim_mujoco_worker
+        sim_mujoco_worker = Mujoco(env, env_name)
+
     def createParticles(self, mujoco_env):
         particles_count = 0
         split_index = 0
 
         contact_pairs = self.getContactPairs(mujoco_env)
         while particles_count < self.n_particles:
-            self.particle_batches[split_index].append(Particle(mujoco_env,
-                                                               self.parameters, self.sims_mujoco_workers[split_index],
-                                                               contact_pairs))
+            self.particle_batches[split_index].append(Particle(mujoco_env, self.parameters, contact_pairs))
             split_index += 1
             if split_index == self.num_cpu:
                 split_index = 0
@@ -140,8 +147,7 @@ class PSO:
         for particles_batch in self.particle_batches:
             for particle in particles_batch:
                 particle.initializePosition(actions, simulator_state)
-        fitness_results = np.array(self._try_multiprocess(self.particle_batches, 1000, 4,
-                                                          self.batchParticlesInitialization))
+        fitness_results = np.array(self._run_multiprocess(self.particle_batches, self.batchParticlesInitialization))
         lowest_batch_index = fitness_results.argmin()
         lowest_fitness = min(fitness_results[lowest_batch_index])
         self.best_global_fitness = lowest_fitness
@@ -163,8 +169,7 @@ class PSO:
         self.initializeParticles(actions, simulator_state)
 
         for i in range(0, self.iteration_count):
-            fitness_results = np.array(self._try_multiprocess(self.particle_batches, 1000, 4,
-                                                              self.batchParticlesGeneration))
+            fitness_results = np.array(self._run_multiprocess(self.particle_batches, self.batchParticlesGeneration))
             # update personal bests
             for j in range(self.num_cpu):
                 for k in range(len(fitness_results[j])):
@@ -182,29 +187,8 @@ class PSO:
                         particle.updateGlobalBest(best_particle_position)
         return self.best_particle_position
 
-    def _try_multiprocess(self, args_list, max_process_time, max_timeouts, function):
-        # Base case
-        if max_timeouts == 0:
-            return None
-
-        # pool = Pool(processes=self.num_cpu, maxtasksperchild=1)
-        # parallel_runs = [pool.apply_async(function,
-        #                                   args=(args_list[i],)) for i in range(self.num_cpu)]
-        # try:
-        #     results = [p.get(timeout=max_process_time) for p in parallel_runs]
-        # except Exception as e:
-        #     print(str(e))
-        #     print("Timeout Error raised... Trying again")
-        #     pool.close()
-        #     pool.terminate()
-        #     pool.join()
-        #     return self._try_multiprocess(args_list, max_process_time, max_timeouts - 1, function)
-        # pool.close()
-        # pool.terminate()
-        # pool.join()
-        results = []
-        for i in range(self.num_cpu):
-            results.append(function(args_list[i]))
+    def _run_multiprocess(self, args_list, function):
+        results = self.worker_pool.map(function, args_list)
         return results
 
     def _setHandTargetPositionAndQuaternion(self, target_position, target_quaternion):

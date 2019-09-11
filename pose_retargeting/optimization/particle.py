@@ -2,9 +2,8 @@ import numpy as np
 
 
 class Particle:
-    def __init__(self, mujoco_env, parameters, sim_mujoco_worker, contact_pairs):
+    def __init__(self, mujoco_env, parameters, contact_pairs):
         self.parameters = parameters
-        self.sim_mujoco_worker = sim_mujoco_worker
 
         self.best_position = None
         self.personal_best = float("inf")
