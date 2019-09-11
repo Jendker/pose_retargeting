@@ -7,14 +7,31 @@ from pose_retargeting.rotations_mujoco import quat2euler
 
 
 class Weights:
-    def __init__(self, bodies_for_hand_pose_energy_position):
-        self.weight_hand_pose_energy = 0.5
+    def __init__(self, bodies_for_hand_pose_energy_position, minimum_distance=None, maximum_distance=None):
+        self.weight_hand_pose_energy_position = None
+        self.weight_hand_pose_energy_angle = None
+        self.max_weight_hand_pose_energy = 1
+        self.min_weight_hand_pose_energy = 0.2
         self.pose_weights = np.ones(len(bodies_for_hand_pose_energy_position))
         self.sum_of_hand_pose_weights = np.sum(self.pose_weights)
         # weights task energy
-        self.weight_task_energy = 0.5
+        self.weight_task_energy = None
+        self.max_weight_task_energy = 0.8
+        self.min_weight_task_energy = 0
         self.palm_weight = self.finger_tip_weight = 1
         self.sum_of_task_energy_weights = self.palm_weight + self.finger_tip_weight * 5
+
+        self.minimum_distance = minimum_distance if minimum_distance is not None else 0.02
+        self.maximum_distance = maximum_distance if maximum_distance is not None else 0.08
+
+    def update_weights(self, distance_between_hand_and_object):
+        distance = np.clip(distance_between_hand_and_object, self.minimum_distance, self.maximum_distance)
+        # alpha = (0, 1) with 0 meaning we are very close to the object
+        alpha = (distance - self.minimum_distance) / (self.maximum_distance - self.minimum_distance)
+        self.weight_task_energy = self.min_weight_task_energy * alpha + self.max_weight_task_energy * (1 - alpha)
+        weight_pose_energy = self.max_weight_hand_pose_energy * alpha + self.min_weight_hand_pose_energy * (1 - alpha)
+        self.weight_hand_pose_energy_position = weight_pose_energy * 0.75
+        self.weight_hand_pose_energy_angle = weight_pose_energy * 0.25
 
 
 class PSO:
@@ -60,6 +77,8 @@ class PSO:
         self.particle_batches = [[] for i in range(self.num_cpu)]
         self.createParticles(mujoco_env)
         self.palm_max_index, self.palm_min_index = self.getMaxMinPalmGeomIndices(mujoco_env)
+        self.obj_body_index = mujoco_env.env.model.body_name2id('Object')
+        self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
 
     @staticmethod
     def getMaxMinPalmGeomIndices(mujoco_env):
@@ -82,6 +101,11 @@ class PSO:
                 tmp = [geom2[i] for i in np.where(np.asarray(geom1) == elem)[0]]
                 pairs[elem] = tmp
         return pairs
+
+    def getDistanceBetweenObjectAndHand(self, mujoco_env):
+        obj_pos = mujoco_env.env.data.body_xpos[self.obj_body_index].ravel()
+        palm_pos = mujoco_env.env.data.site_xpos[self.grasp_site_index].ravel()
+        return np.linalg.norm(obj_pos - palm_pos)
 
     def createParticles(self, mujoco_env):
         particles_count = 0
@@ -115,6 +139,11 @@ class PSO:
                 particle.initializeVelocity()
 
     def optimize(self, actions, mujoco_env):
+        distance_between_object_and_hand = self.getDistanceBetweenObjectAndHand(mujoco_env)
+        if distance_between_object_and_hand > 0.2:
+            return actions
+
+        self.weights.update_weights(distance_between_object_and_hand)
         simulator_state = mujoco_env.env.gs()
 
         self.initializeParticles(actions, simulator_state)
@@ -205,9 +234,6 @@ class PSO:
         # print("Angles", mse)
         return mse
 
-    def getHandPoseEnergy(self, particle):
-        return self.getHandPoseEnergyPosition(particle) + self.getHandPoseEnergyAngles(particle)
-
     def getTaskEnergy(self, particle):
         missing_weight = 2
         margin = 0.04
@@ -264,5 +290,6 @@ class PSO:
         return energies
 
     def fitness(self, particle):
-        return self.weights.weight_hand_pose_energy * self.getHandPoseEnergy(particle) \
-               + self.weights.weight_hand_pose_energy * self.getTaskEnergy(particle)
+        return self.weights.weight_hand_pose_energy_position * self.getHandPoseEnergyPosition(particle) + \
+               self.weights.weight_hand_pose_energy_angle * self.getHandPoseEnergyAngles(particle) + \
+               + self.weights.weight_task_energy * self.getTaskEnergy(particle)
