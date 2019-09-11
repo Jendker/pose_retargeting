@@ -81,11 +81,17 @@ class PSO:
         self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
 
         self.closest_indices = {}
+        self.mujoco_env = mujoco_env
 
     def __del__(self):
         import operator
         sorted_closest_indices = sorted(self.closest_indices.items(), key=operator.itemgetter(1), reverse=True)
         print(sorted_closest_indices)
+        print("id to names:")
+        sorted_closest_names = []
+        for elem in sorted_closest_indices:
+            sorted_closest_names.append((self.mujoco_env.env.model.geom_id2name(elem[0]), elem[1]))
+        print(sorted_closest_names)
 
     @staticmethod
     def getMaxMinPalmGeomIndices(mujoco_env):
