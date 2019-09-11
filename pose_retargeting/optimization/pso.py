@@ -80,6 +80,13 @@ class PSO:
         self.obj_body_index = mujoco_env.env.model.body_name2id('Object')
         self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
 
+        self.closest_indices = {}
+
+    def __del__(self):
+        import operator
+        sorted_closest_indices = sorted(self.closest_indices.items(), key=operator.itemgetter(1), reverse=True)
+        print(sorted_closest_indices)
+
     @staticmethod
     def getMaxMinPalmGeomIndices(mujoco_env):
         palm_geom_indices = []
@@ -245,18 +252,24 @@ class PSO:
         real_contact_distances = []
         if contact_dist:
             # find smallest distance for palm (we have many, many geoms currently for palm)
-            palm_distances = []
+            palm_distances = {}
             for key in contact_dist:
                 # check if key (index) belongs to palm
                 if self.palm_max_index >= key >= self.palm_min_index:
                     # if so, append
-                    palm_distances.append(contact_dist[key])
+                    palm_distances[key] = (contact_dist[key])
                 else:
                     # it is finger, just add to to real_contact_dist
                     real_contact_distances.append(contact_dist[key])
             if palm_distances:
                 # only add the smallest palm distance to real_contact_dist for energy calculation
-                smallest_distance = min(palm_distances)
+                smallest_key = min(palm_distances, key=palm_distances.get)
+                print(smallest_key)
+                smallest_distance = palm_distances[smallest_key]
+                if smallest_key in self.closest_indices:
+                    self.closest_indices[smallest_key] += 1
+                else:
+                    self.closest_indices[smallest_key] = 1
                 for i in range(palm_w - 1):
                     real_contact_distances.append(smallest_distance)  # add identical palm entries for the mean
         total = 5 + palm_w
