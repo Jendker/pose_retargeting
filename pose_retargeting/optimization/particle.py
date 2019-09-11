@@ -30,19 +30,6 @@ class Particle:
         self.velocity_bound = None
         self.contact_pairs = contact_pairs
 
-    def getPairContacts(self):
-        geom1 = self.sim_mujoco_worker.env.model.pair_geom1
-        geom2 = self.sim_mujoco_worker.env.model.pair_geom2
-        # TODO: group the geoms into bodies
-        pairs = {}
-        if geom1 is not None and geom2 is not None:
-            assert (len(geom1) == len(geom2))
-            # group geom2 by geom1
-            for elem in set(geom1):
-                tmp = [geom2[i] for i in np.where(np.asarray(geom1) == elem)[0]]
-                pairs[elem] = tmp
-        return pairs
-
     def initializePosition(self, position, simulator_state):
         self.simulator_initial_state = simulator_state
         self.position_lower_bound = np.maximum(self.actions_lower_bound, position - self.init_action_range)

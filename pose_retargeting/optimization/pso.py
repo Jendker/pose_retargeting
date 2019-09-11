@@ -7,7 +7,7 @@ from pose_retargeting.rotations_mujoco import quat2euler
 
 
 class Weights:
-    def __init__(self, bodies_for_hand_pose_energy_position, minimum_distance=None, maximum_distance=None):
+    def __init__(self, bodies_for_hand_pose_energy_position, mujoco_env, minimum_distance=None, maximum_distance=None):
         self.weight_hand_pose_energy_position = None
         self.weight_hand_pose_energy_angle = None
         self.max_weight_hand_pose_energy = 1
@@ -16,10 +16,13 @@ class Weights:
         self.sum_of_hand_pose_weights = np.sum(self.pose_weights)
         # weights task energy
         self.weight_task_energy = None
+
         self.max_weight_task_energy = 0.8
         self.min_weight_task_energy = 0
-        self.palm_weight = self.finger_tip_weight = 1
-        self.sum_of_task_energy_weights = self.palm_weight + self.finger_tip_weight * 5
+
+        self.palm_weight = 3
+        self.finger_geom_count = self.get_finger_geoms_count(mujoco_env)
+        self.sum_of_task_energy_weights = self.palm_weight + self.finger_geom_count
 
         self.minimum_distance = minimum_distance if minimum_distance is not None else 0.02
         self.maximum_distance = maximum_distance if maximum_distance is not None else 0.08
@@ -33,6 +36,17 @@ class Weights:
         self.weight_hand_pose_energy_position = weight_pose_energy * 0.75
         self.weight_hand_pose_energy_angle = weight_pose_energy * 0.25
 
+    @staticmethod
+    def get_finger_geoms_count(mujoco_env):
+        count = 0
+        geom1 = mujoco_env.env.model.pair_geom1
+        geom2 = mujoco_env.env.model.pair_geom2
+        all_geoms = set().union(geom1, geom2)
+        for geom_id in all_geoms:
+            geom_name = mujoco_env.env.model.geom_id2name(geom_id)
+            if '1_collision' in geom_name or '2_collision' in geom_name:
+                count += 1
+        return count
 
 class PSO:
     def __init__(self, mujoco_env, parameters=None, no_cpu=7):
@@ -65,7 +79,7 @@ class PSO:
         #                                           self.mujoco_env.model.joint_name2id('rh_THJ1')+1]
 
         # weights hand pose energy
-        self.weights = Weights(self.bodies_for_hand_pose_energy_position)
+        self.weights = Weights(self.bodies_for_hand_pose_energy_position, mujoco_env)
 
         # environments for parallel workers
         envs = [GymEnv(mujoco_env.env_name) for i in range(self.num_cpu)]
@@ -89,7 +103,7 @@ class PSO:
         return max(palm_geom_indices), min(palm_geom_indices)
 
     @staticmethod
-    def getPairContacts(mujoco_env):
+    def getContactPairs(mujoco_env):
         geom1 = mujoco_env.env.model.pair_geom1
         geom2 = mujoco_env.env.model.pair_geom2
         # TODO: group the geoms into bodies
@@ -111,7 +125,7 @@ class PSO:
         particles_count = 0
         split_index = 0
 
-        contact_pairs = self.getPairContacts(mujoco_env)
+        contact_pairs = self.getContactPairs(mujoco_env)
         while particles_count < self.n_particles:
             self.particle_batches[split_index].append(Particle(mujoco_env,
                                                                self.parameters, self.sims_mujoco_workers[split_index],
@@ -140,7 +154,7 @@ class PSO:
 
     def optimize(self, actions, mujoco_env):
         distance_between_object_and_hand = self.getDistanceBetweenObjectAndHand(mujoco_env)
-        if distance_between_object_and_hand > 0.2:
+        if distance_between_object_and_hand > 0.1:
             return actions
 
         self.weights.update_weights(distance_between_object_and_hand)
@@ -240,8 +254,7 @@ class PSO:
         constant = 0.004
         contact_dist = particle.getActiveContactsDist()
         # add palm
-        palm_w = 3  # palm weight to make it more important than the rest of the tips (must be integer)
-        assert(isinstance(palm_w, int))
+        assert(isinstance(self.weights.palm_weight, int))  # palm weight to make it more important than the rest of the tips (must be integer)
         real_contact_distances = []
         if contact_dist:
             # find smallest distance for palm (we have many, many geoms currently for palm)
@@ -257,9 +270,9 @@ class PSO:
             if palm_distances:
                 # only add the smallest palm distance to real_contact_dist for energy calculation
                 smallest_distance = min(palm_distances)
-                for i in range(palm_w - 1):
+                for i in range(self.weights.palm_weight - 1):
                     real_contact_distances.append(smallest_distance)  # add identical palm entries for the mean
-        total = 5 + palm_w
+        total = self.weights.sum_of_task_energy_weights
         if real_contact_distances:
             s = (total - len(real_contact_distances)) * missing_weight * (
                         (margin + constant) ** 2)  # punish for those that are not even in range
