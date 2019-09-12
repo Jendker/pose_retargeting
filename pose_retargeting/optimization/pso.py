@@ -348,8 +348,6 @@ class PSO:
             particle.updatePositionAndVelocity()
             particle.simulationStep(glob_sim_mujoco_worker)
             energies.append(PSO.fitness(particle, weights, targets))
-            particle.sim_mujoco_worker = None  # TODO: Does it prevent simulation environment from being pickled?
-            # TODO: simply revert this change which allowed pickling of env and check if it crashes
         return energies
 
     @staticmethod
