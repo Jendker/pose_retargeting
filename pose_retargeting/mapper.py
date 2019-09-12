@@ -274,12 +274,12 @@ class Mapper:
         self.PSO.new_taget_pose(data, position, quaternion)
 
     def getControlOnce(self):
-        frequency = self.FPSCounter.getAndPrintFPS()
-        return self.hand.getControlOnce(frequency)
+        self.FPSCounter.getAndPrintFPS()
+        return self.hand.getControlOnce()
 
     def getClampedControlOnce(self):
-        frequency = self.FPSCounter.getAndPrintFPS()
-        actions = self.hand.getControlOnce(frequency)
+        self.FPSCounter.getAndPrintFPS()
+        actions = self.hand.getControlOnce()
         actions = self.PSO.optimize(actions, self.simulator)
         return self.simulator.clampActions(actions)
 

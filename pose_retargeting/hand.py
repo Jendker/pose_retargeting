@@ -55,12 +55,12 @@ class Hand:
         if self.calculate_error:
             self.error_calculation.calculateError()
 
-    def getControlOnce(self, frequency):
+    def getControlOnce(self):
         action_dict = {}
         for hand_part in self.hand_parts_list:
             action_dict.update(hand_part.executeControl())  # given as velocities
         # for key, value in action_dict.items():
-        #     action_dict[key] = value / frequency  # integrate the velocity
+        #     action_dict[key] = value * self.simulator.env.dt  # integrate the velocity
 
         complete_action_vector = self.simulator.getHandBaseAction()
         complete_action_vector = np.pad(complete_action_vector, (0, self.simulator.getNumberOfJoints() -
