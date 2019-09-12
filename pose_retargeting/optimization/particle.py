@@ -29,6 +29,8 @@ class Particle:
         self.velocity_bound = None
         self.contact_pairs = contact_pairs
 
+        self.sim_mujoco_worker = None
+
     def initializePosition(self, position, simulator_state):
         self.simulator_initial_state = simulator_state
         self.position_lower_bound = np.maximum(self.actions_lower_bound, position - self.init_action_range)
@@ -60,7 +62,8 @@ class Particle:
             self.personal_best = this_fitness
             self.best_position = self.position
 
-    def simulationStep(self):
+    def simulationStep(self, sim_mujoco_worker):
+        self.sim_mujoco_worker = sim_mujoco_worker
         self.sim_mujoco_worker.env.ss(self.simulator_initial_state)
         self.sim_mujoco_worker.env.step(self.position)
 

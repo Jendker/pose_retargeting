@@ -6,6 +6,10 @@ from multiprocessing import Pool
 from pose_retargeting.rotations_mujoco import quat2euler
 
 
+glob_constant_data = None
+glob_sim_mujoco_worker = None
+
+
 class Weights:
     def __init__(self, bodies_for_hand_pose_energy_position, mujoco_env, minimum_distance=None, maximum_distance=None):
         self.weight_hand_pose_energy_position = None
@@ -48,53 +52,23 @@ class Weights:
                 count += 1
         return count
 
-class PSO:
-    def __init__(self, mujoco_env, parameters=None, no_cpu=7):
-        self.num_cpu = no_cpu
 
-        if parameters is None:
-            self.parameters = {'c1': 2.8, 'c2': 1.3}
-        else:
-            self.parameters = parameters
-        psi = self.parameters['c1'] + self.parameters['c2']
-        self.parameters['omega'] = 2/abs(2-psi-np.sqrt(psi*psi-4 * psi))
-        self.n_particles = 10
-        self.iteration_count = 5
-        self.dimension = mujoco_env.getNumberOfJoints()
+class Targets:
+    def __init__(self):
         self.target_joints_pose = None
         self.hand_target_position = None
         self.hand_target_orientation = None
-        self.particles = None
-        self.best_global_fitness = float("inf")
-        self.best_particle_position = None
 
+
+class ConstantData:
+    def __init__(self, mujoco_env):
         self.HPE_indices_for_hand_pose_energy_position = range(2, 21)
         self.bodies_for_hand_pose_energy_position = [mujoco_env.getHPEIndexEquivalentBody(x)
                                                      for x in self.HPE_indices_for_hand_pose_energy_position]
         self.HPE_indices_for_hand_pose_energy_angle = range(0, 21)
         self.bodies_for_hand_pose_energy_angles = [mujoco_env.getHPEIndexEquivalentBody(x)
                                                    for x in self.HPE_indices_for_hand_pose_energy_angle]
-        # joint_names_for_hand_pose_energy_angles = self.mujoco_env.model.joint_names[
-        #                                           self.mujoco_env.model.joint_name2id('rh_FFJ4'):
-        #                                           self.mujoco_env.model.joint_name2id('rh_THJ1')+1]
-
-        # weights hand pose energy
-        self.weights = Weights(self.bodies_for_hand_pose_energy_position, mujoco_env)
-
-        # environments for parallel workers
-        self.worker_pool = Pool(self.num_cpu, initializer=self.initialize_env, initargs=[mujoco_env.env_name])
-
-        # create particles
-        self.particle_batches = [[] for i in range(self.num_cpu)]
-        self.createParticles(mujoco_env)
         self.palm_max_index, self.palm_min_index = self.getMaxMinPalmGeomIndices(mujoco_env)
-        self.obj_body_index = mujoco_env.env.model.body_name2id('Object')
-        self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
-
-    def __del__(self):
-        self.worker_pool.close()
-        self.worker_pool.terminate()
-        self.worker_pool.join()
 
     @staticmethod
     def getMaxMinPalmGeomIndices(mujoco_env):
@@ -103,6 +77,56 @@ class PSO:
             if 'palm_collision_' in geom_name:
                 palm_geom_indices.append(mujoco_env.env.model.geom_name2id(geom_name))
         return max(palm_geom_indices), min(palm_geom_indices)
+
+
+class PSO:
+    def __init__(self, mujoco_env, parameters=None, no_cpu=8):
+        self.num_cpu = no_cpu
+
+        if parameters is None:
+            self.parameters = {'c1': 2.8, 'c2': 1.3}
+        else:
+            self.parameters = parameters
+        psi = self.parameters['c1'] + self.parameters['c2']
+        self.parameters['omega'] = 2/abs(2-psi-np.sqrt(psi*psi-4 * psi))
+
+        self.n_particles = 16
+        self.iteration_count = 5
+        self.dimension = mujoco_env.getNumberOfJoints()
+
+        self.particles = None
+        self.best_global_fitness = float("inf")
+        self.best_particle_position = None
+
+        # joint_names_for_hand_pose_energy_angles = self.mujoco_env.model.joint_names[
+        #                                           self.mujoco_env.model.joint_name2id('rh_FFJ4'):
+        #                                           self.mujoco_env.model.joint_name2id('rh_THJ1')+1]
+
+        self.constant_data = ConstantData(mujoco_env)
+
+        # parallel workers with environments
+        if self.num_cpu > 1:
+            self.worker_pool = Pool(self.num_cpu, initializer=PSO.initialize_pool, initargs=[self.constant_data,
+                                                                                         mujoco_env.env_name])
+
+        self.weights = Weights(self.constant_data.bodies_for_hand_pose_energy_position, mujoco_env)
+        self.targets = Targets()
+
+        # create particles
+        self.particle_batches = [[] for i in range(self.num_cpu)]
+        self.createParticles(mujoco_env)
+        self.obj_body_index = mujoco_env.env.model.body_name2id('Object')
+        self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
+
+        self.mujoco_env = mujoco_env
+
+    def __del__(self):
+        try:
+            self.worker_pool.close()
+            self.worker_pool.terminate()
+            self.worker_pool.join()
+        except AttributeError:
+            pass
 
     @staticmethod
     def getContactPairs(mujoco_env):
@@ -124,11 +148,12 @@ class PSO:
         return np.linalg.norm(obj_pos - palm_pos)
 
     @staticmethod
-    def initialize_env(env_name):
+    def initialize_pool(constant_data, env_name):
+        global glob_sim_mujoco_worker, glob_constant_data
+        glob_constant_data = constant_data
         env = GymEnv(env_name)
         env.reset()
-        global sim_mujoco_worker
-        sim_mujoco_worker = Mujoco(env, env_name)
+        glob_sim_mujoco_worker = Mujoco(env, env_name)
 
     def createParticles(self, mujoco_env):
         particles_count = 0
@@ -143,19 +168,30 @@ class PSO:
             particles_count += 1
         self.particle_batches = tuple(self.particle_batches)
 
+    @staticmethod
+    def fillShorterLists(lists_input):
+        max_len = max([len(lists_input) for lists_input in lists_input])
+        for list_input in lists_input:
+            list_input.extend([float("inf")] * (max_len - len(list_input)))
+
+
     def initializeParticles(self, actions, simulator_state):
         for particles_batch in self.particle_batches:
             for particle in particles_batch:
                 particle.initializePosition(actions, simulator_state)
-        fitness_results = np.array(self._run_multiprocess(self.particle_batches, self.batchParticlesInitialization))
-        lowest_batch_index = fitness_results.argmin()
-        lowest_fitness = min(fitness_results[lowest_batch_index])
+
+        inputs = [[particles_batch, self.weights, self.targets] for particles_batch in self.particle_batches]
+        fitness_results = self._run_multiprocess(inputs, PSO.batchParticlesInitialization)
+        PSO.fillShorterLists(fitness_results)
+        fitness_results = np.array(fitness_results)
+        lowest_batch_index, lowest_particle_index = np.unravel_index(np.argmin(fitness_results, axis=None),
+                                                                     fitness_results.shape)
+        lowest_fitness = fitness_results[lowest_batch_index][lowest_particle_index]
+        self.best_particle_position = self.particle_batches[lowest_batch_index][lowest_particle_index].position
         self.best_global_fitness = lowest_fitness
-        lowest_particle_index = fitness_results[lowest_batch_index].index(lowest_fitness)
-        best_particle_position = self.particle_batches[lowest_batch_index][lowest_particle_index].position
         for particles_batch in self.particle_batches:
             for particle in particles_batch:
-                particle.updateGlobalBest(best_particle_position)
+                particle.updateGlobalBest(self.best_particle_position)
                 particle.initializeVelocity()
 
     def optimize(self, actions, mujoco_env):
@@ -169,46 +205,59 @@ class PSO:
         self.initializeParticles(actions, simulator_state)
 
         for i in range(0, self.iteration_count):
-            fitness_results = np.array(self._run_multiprocess(self.particle_batches, self.batchParticlesGeneration))
+            inputs = [[particles_batch, self.weights, self.targets] for particles_batch in self.particle_batches]
+            fitness_results = self._run_multiprocess(inputs, PSO.batchParticlesInitialization)
             # update personal bests
             for j in range(self.num_cpu):
                 for k in range(len(fitness_results[j])):
                     self.particle_batches[j][k].updatePersonalBest(fitness_results[j][k])
 
-            lowest_batch_index = fitness_results.argmin()
-            lowest_fitness = min(fitness_results[lowest_batch_index])
+            PSO.fillShorterLists(fitness_results)
+            fitness_results = np.array(fitness_results)
+            lowest_batch_index, lowest_particle_index = np.unravel_index(np.argmin(fitness_results, axis=None),
+                                                                         fitness_results.shape)
+            lowest_fitness = fitness_results[lowest_batch_index][lowest_particle_index]
             if lowest_fitness < self.best_global_fitness:
-                lowest_particle_index = fitness_results[lowest_batch_index].index(lowest_fitness)
-                best_particle_position = self.particle_batches[lowest_batch_index][lowest_particle_index].position
+                self.best_particle_position = self.particle_batches[lowest_batch_index][lowest_particle_index].position
                 self.best_global_fitness = lowest_fitness
-                self.best_particle_position = best_particle_position
                 for particle_batch in self.particle_batches:
                     for particle in particle_batch:
-                        particle.updateGlobalBest(best_particle_position)
+                        particle.updateGlobalBest(self.best_particle_position)
         return self.best_particle_position
 
     def _run_multiprocess(self, args_list, function):
-        results = self.worker_pool.map(function, args_list)
+        if self.num_cpu > 1:
+            results = self.worker_pool.map(function, args_list)
+        else:
+            results = []
+            if glob_sim_mujoco_worker is None:
+                PSO.initialize_pool(self.constant_data, self.mujoco_env.env_name)
+            for i in range(self.num_cpu):
+                results.append(function(args_list[i]))
         return results
 
     def _setHandTargetPositionAndQuaternion(self, target_position, target_quaternion):
-        self.hand_target_position = target_position
-        self.hand_target_orientation = quat2euler(target_quaternion)
+        self.targets.hand_target_position = target_position
+        self.targets.hand_target_orientation = quat2euler(target_quaternion)
     
     def new_taget_pose(self, new_target_fingers_pose, target_position, target_quaternion):
-        self.target_joints_pose = new_target_fingers_pose
+        self.targets.target_joints_pose = new_target_fingers_pose
         self._setHandTargetPositionAndQuaternion(target_position, target_quaternion)
 
-    def getHandPoseEnergyPosition(self, particle):
+    @staticmethod
+    def getHandPoseEnergyPosition(particle, weights, targets):
+        global glob_constant_data
         energy = 0
-        evaluated_hand_position = particle.sim_mujoco_worker.simulationObjectsPoseList(self.bodies_for_hand_pose_energy_position)
+        evaluated_hand_position = particle.sim_mujoco_worker.simulationObjectsPoseList(
+            glob_constant_data.bodies_for_hand_pose_energy_position)
         for index, (target_pose, eval_hand_pose) in enumerate(
-                zip(self.target_joints_pose, evaluated_hand_position)):
-            energy += self.weights.pose_weights[index] * np.linalg.norm(target_pose - eval_hand_pose)**2
-        # print("Position", energy / self.weights.sum_of_hand_pose_weights)
-        return energy / self.weights.sum_of_hand_pose_weights
+                zip(targets.target_joints_pose, evaluated_hand_position)):
+            energy += weights.pose_weights[index] * np.linalg.norm(target_pose - eval_hand_pose)**2
+        return energy / weights.sum_of_hand_pose_weights
 
-    def getHandPoseEnergyAngles(self, particle):
+    @staticmethod
+    def getHandPoseEnergyAngles(particle, targets):
+        global glob_constant_data
         fingers = [[0, 2, 9, 10, 11], [0, 3, 12, 13, 14], [0, 4, 15, 16, 17], [0, 5, 18, 19, 20], [0, 1, 6, 7, 8]]
         target_angles = []
         evaluated_joint_positions = []
@@ -220,11 +269,12 @@ class PSO:
                     continue
                 previous_index = finger[index - 1]
                 next_index = finger[index + 1]
-                previous_vector_target = self.target_joints_pose[this_point_index] - self.target_joints_pose[
+                previous_vector_target = targets.target_joints_pose[this_point_index] - targets.target_joints_pose[
                     previous_index]
-                next_vector_target = self.target_joints_pose[next_index] - self.target_joints_pose[this_point_index]
+                next_vector_target = targets.target_joints_pose[next_index] -\
+                                     targets.target_joints_pose[this_point_index]
                 target_angles.append(np.arccos(np.dot(next_vector_target, previous_vector_target)))
-                evaluated_joint_positions.append(particle.sim_mujoco_worker.getJointPosition(self.bodies_for_hand_pose_energy_angles[
+                evaluated_joint_positions.append(particle.sim_mujoco_worker.getJointPosition(glob_constant_data.bodies_for_hand_pose_energy_angles[
                     this_point_index])[1])
         target_angles = np.array(target_angles)
         evaluated_joint_positions = np.array(evaluated_joint_positions)
@@ -232,20 +282,22 @@ class PSO:
         # print("Angles", mse)
         return mse
 
-    def getTaskEnergy(self, particle):
+    @staticmethod
+    def getTaskEnergy(particle, weights):
+        global glob_constant_data
         missing_weight = 2
         margin = 0.04
         constant = 0.004
         contact_dist = particle.getActiveContactsDist()
         # add palm
-        assert(isinstance(self.weights.palm_weight, int))  # palm weight to make it more important than the rest of the tips (must be integer)
+        assert(isinstance(weights.palm_weight, int))  # palm weight to make it more important than the rest of the tips (must be integer)
         real_contact_distances = []
         if contact_dist:
             # find smallest distance for palm (we have many, many geoms currently for palm)
             palm_distances = []
             for key in contact_dist:
                 # check if key (index) belongs to palm
-                if self.palm_max_index >= key >= self.palm_min_index:
+                if glob_constant_data.palm_max_index >= key >= glob_constant_data.palm_min_index:
                     # if so, append
                     palm_distances.append(contact_dist[key])
                 else:
@@ -254,9 +306,9 @@ class PSO:
             if palm_distances:
                 # only add the smallest palm distance to real_contact_dist for energy calculation
                 smallest_distance = min(palm_distances)
-                for i in range(self.weights.palm_weight - 1):
+                for i in range(weights.palm_weight - 1):
                     real_contact_distances.append(smallest_distance)  # add identical palm entries for the mean
-        total = self.weights.sum_of_task_energy_weights
+        total = weights.sum_of_task_energy_weights
         if real_contact_distances:
             s = (total - len(real_contact_distances)) * missing_weight * (
                         (margin + constant) ** 2)  # punish for those that are not even in range
@@ -271,22 +323,39 @@ class PSO:
         else:
             return 1
 
-    def batchParticlesInitialization(self, particle_batch):
+    @staticmethod
+    def batchParticlesInitialization(inputs):
+        particle_batch = inputs[0]
+        weights = inputs[1]
+        targets = inputs[2]
+        global glob_sim_mujoco_worker
+
         energies = []
         for particle in particle_batch:
-            particle.simulationStep()
-            energies.append(self.fitness(particle))
+            particle.simulationStep(glob_sim_mujoco_worker)
+            energies.append(PSO.fitness(particle, weights, targets))
         return energies
 
-    def batchParticlesGeneration(self, particle_batch):
+    @staticmethod
+    def batchParticlesGeneration(inputs):
+        particle_batch = inputs[0]
+        weights = inputs[1]
+        targets = inputs[2]
+        global glob_sim_mujoco_worker
+
         energies = []
         for particle in particle_batch:
             particle.updatePositionAndVelocity()
-            particle.simulationStep()
-            energies.append(self.fitness(particle))
+            particle.simulationStep(glob_sim_mujoco_worker)
+            energies.append(PSO.fitness(particle, weights, targets))
+            particle.sim_mujoco_worker = None  # TODO: Does it prevent simulation environment from being pickled?
+            # TODO: simply revert this change which allowed pickling of env and check if it crashes
         return energies
 
-    def fitness(self, particle):
-        return self.weights.weight_hand_pose_energy_position * self.getHandPoseEnergyPosition(particle) + \
-               self.weights.weight_hand_pose_energy_angle * self.getHandPoseEnergyAngles(particle) + \
-               + self.weights.weight_task_energy * self.getTaskEnergy(particle)
+    @staticmethod
+    def fitness(particle, weights, targets):
+        global glob_constant_data
+        return weights.weight_hand_pose_energy_position * PSO.getHandPoseEnergyPosition(particle, weights, targets) + \
+               weights.weight_hand_pose_energy_angle * PSO.getHandPoseEnergyAngles(particle, targets) + \
+               + weights.weight_task_energy * PSO.getTaskEnergy(particle, weights)
+
