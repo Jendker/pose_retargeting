@@ -106,7 +106,6 @@ class PSO:
         for list_input in lists_input:
             list_input.extend([float("inf")] * (max_len - len(list_input)))
 
-
     def initializeParticles(self, actions, simulator_state):
         for particles_batch in self.particle_batches:
             for particle in particles_batch:
@@ -223,6 +222,7 @@ class PSO:
         contact_dist = particle.getActiveContactsDist()
         # add palm
         assert(isinstance(weights.palm_weight, int))  # palm weight to make it more important than the rest of the tips (must be integer)
+        assert(isinstance(weights.thumb_weight, int))  # thumb weight the same story
         real_contact_distances = []
         if contact_dist:
             # find smallest distance for palm (we have many, many geoms currently for palm)
@@ -232,6 +232,9 @@ class PSO:
                 if glob_constant_data.palm_max_index >= key >= glob_constant_data.palm_min_index:
                     # if so, append
                     palm_distances.append(contact_dist[key])
+                elif key in glob_constant_data.thumb_geom_indices:
+                    for i in range(weights.thumb_weight - 1):
+                        real_contact_distances.append(contact_dist[key])
                 else:
                     # it is finger, just add to to real_contact_dist
                     real_contact_distances.append(contact_dist[key])

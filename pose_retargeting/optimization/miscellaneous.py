@@ -1,4 +1,5 @@
 import numpy as np
+import re
 
 
 class Weights:
@@ -16,8 +17,10 @@ class Weights:
         self.min_weight_task_energy = 0
 
         self.palm_weight = 3
-        self.finger_geom_count = self.get_finger_geoms_count(mujoco_env)
-        self.sum_of_task_energy_weights = self.palm_weight + self.finger_geom_count
+        self.thumb_weight = 3
+        thumb_geom_count, other_fingers_geom_count = self.get_finger_geoms_count(mujoco_env)
+        self.sum_of_task_energy_weights = self.palm_weight + thumb_geom_count * self.thumb_weight + \
+                                          other_fingers_geom_count
 
         self.minimum_distance = minimum_distance if minimum_distance is not None else 0.08
         self.maximum_distance = maximum_distance if maximum_distance is not None else 0.2
@@ -33,15 +36,19 @@ class Weights:
 
     @staticmethod
     def get_finger_geoms_count(mujoco_env):
-        count = 0
         geom1 = mujoco_env.env.model.pair_geom1
         geom2 = mujoco_env.env.model.pair_geom2
         all_geoms = set().union(geom1, geom2)
+
+        thumb_geom_count = 0
+        other_fingers_geom_count = 0
         for geom_id in all_geoms:
             geom_name = mujoco_env.env.model.geom_id2name(geom_id)
-            if '1_collision' in geom_name or '2_collision' in geom_name:
-                count += 1
-        return count
+            if re.match('TH\d_collision', geom_name):
+                thumb_geom_count += 1
+            if re.match('.F\d_collision', geom_name):
+                other_fingers_geom_count += 1
+        return thumb_geom_count, other_fingers_geom_count
 
 
 class Targets:
@@ -60,6 +67,7 @@ class ConstantData:
         self.bodies_for_hand_pose_energy_angles = [mujoco_env.getHPEIndexEquivalentBody(x)
                                                    for x in self.HPE_indices_for_hand_pose_energy_angle]
         self.palm_max_index, self.palm_min_index = self.getMaxMinPalmGeomIndices(mujoco_env)
+        self.thumb_geom_indices = self.getThumbGeomIndices(mujoco_env)
 
     @staticmethod
     def getMaxMinPalmGeomIndices(mujoco_env):
@@ -68,3 +76,11 @@ class ConstantData:
             if 'palm_collision_' in geom_name:
                 palm_geom_indices.append(mujoco_env.env.model.geom_name2id(geom_name))
         return max(palm_geom_indices), min(palm_geom_indices)
+
+    @staticmethod
+    def getThumbGeomIndices(mujoco_env):
+        thumb_geom_indices = []
+        for geom_name in mujoco_env.env.model.geom_names:
+            if re.match('TH\d_collision', geom_name):
+                thumb_geom_indices.append(mujoco_env.env.model.geom_name2id(geom_name))
+        return thumb_geom_indices
