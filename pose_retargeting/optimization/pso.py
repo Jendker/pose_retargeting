@@ -51,6 +51,7 @@ class PSO:
         self.grasp_site_index = mujoco_env.env.model.site_name2id('S_grasp')
 
         self.mujoco_env = mujoco_env
+        self.trajectory = []
 
     def __del__(self):
         try:
@@ -59,6 +60,10 @@ class PSO:
             self.worker_pool.join()
         except AttributeError:
             pass
+        import pickle
+        print("closing")
+        with open('trajectory.pickle', 'wb') as handle:
+            pickle.dump(self.trajectory, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     @staticmethod
     def getContactPairs(mujoco_env):
@@ -132,6 +137,7 @@ class PSO:
 
         self.weights.update_weights(distance_between_object_and_hand)
         simulator_state = mujoco_env.env.gs()
+        self.trajectory.append(simulator_state)
 
         self.initializeParticles(actions, simulator_state)
 
@@ -254,6 +260,7 @@ class PSO:
             # normalise
             # coeff = (len(contact_dist) + (5 - len(contact_dist)) * missing_weight) * ((margin + constant) ** 2)
             s /= (len(real_contact_distances) + (total - len(real_contact_distances)) * missing_weight) * ((margin + constant) ** 2)
+            print(s)
             return s
         else:
             return 1
