@@ -60,9 +60,15 @@ class Mapper:
             self.PSO = PSO(self.simulator)
         self.start_rotation_base = self.simulator.getHandBaseRotationMatrix().copy()
         self.translation_base = self.simulator.getHandBasePosition().copy()
+        self.translation_base /= 4  # moves the hand a bit forward
         self.inverse_start_transformation_base = euclideanTransformation(self.start_rotation_base.T,
                                                                          -self.start_rotation_base.T
                                                                          @ self.translation_base)
+        rotate_hand = np.array([[np.cos(-np.pi/2), -np.sin(-np.pi/2), 0],
+                                [np.sin(-np.pi/2), np.cos(-np.pi/2), 0],
+                                [0, 0, 1]])
+        self.rotate_hand = self.__euclideanTransformation(rotate_hand, np.zeros(3))  # rotates hand by 90 degrees to match
+                                                                                     # the required orientation
         self.transformation_to_origin_from_demo = None
 
     def __euclideanTransformation(self, rotation_matrix, transformation_vector):
@@ -243,8 +249,11 @@ class Mapper:
         if self.transformation_to_origin_from_demo is None:
             self.transformation_to_origin_from_demo = np.identity(4)
             self.transformation_to_origin_from_demo[0:3, 3] = -inverse_transformation_matrix[0:3, 3]\
-                                                              + np.array([0, 0, 0.25])
-        new_transformation_matrix = self.inverse_start_transformation_base @ self.transformation_to_origin_from_demo @ \
+                                                              + np.array([0, 0, 0.1])
+
+
+        new_transformation_matrix = self.inverse_start_transformation_base @ self.rotate_hand @ \
+                                    self.transformation_to_origin_from_demo @ \
                                     inverse_transformation_matrix  # in rotated hand coordinates with shift of origin
                                                                    # to place where hand was on the beginning of demo
         return new_transformation_matrix
