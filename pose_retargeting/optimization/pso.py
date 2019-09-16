@@ -29,6 +29,7 @@ class PSO:
         self.particles = None
         self.best_global_fitness = float("inf")
         self.best_particle_position = None
+        self.last_best_particle_position = None
 
         # joint_names_for_hand_pose_energy_angles = self.mujoco_env.model.joint_names[
         #                                           self.mujoco_env.model.joint_name2id('rh_FFJ4'):
@@ -107,9 +108,13 @@ class PSO:
             list_input.extend([float("inf")] * (max_len - len(list_input)))
 
     def initializeParticles(self, actions, simulator_state):
+        if self.last_best_particle_position is not None:
+            initial_particle_position = (actions + self.last_best_particle_position) / 2
+        else:
+            initial_particle_position = actions
         for particles_batch in self.particle_batches:
             for particle in particles_batch:
-                particle.initializePosition(actions, simulator_state)
+                particle.initializePosition(initial_particle_position, simulator_state)
 
         inputs = [[particles_batch, self.weights, self.targets] for particles_batch in self.particle_batches]
         fitness_results = self._run_multiprocess(inputs, PSO.batchParticlesInitialization)
@@ -154,6 +159,7 @@ class PSO:
                 for particle_batch in self.particle_batches:
                     for particle in particle_batch:
                         particle.updateGlobalBest(self.best_particle_position)
+        self.last_best_particle_position = self.best_particle_position
         return self.best_particle_position
 
     def _run_multiprocess(self, args_list, function):
