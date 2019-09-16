@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class Mapper:
-    def __init__(self, node_name, simulator=None):
+    def __init__(self, node_name, simulator=None, use_PSO=True):
         self.last_callback_time = 0  # 0 means no callback yet
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
@@ -56,7 +56,8 @@ class Mapper:
         self.scaler = Scaler(self.simulator)
         logger.info("Pose mapping initialization finished.")
 
-        self.PSO = PSO(self.simulator)
+        if use_PSO:
+            self.PSO = PSO(self.simulator)
         self.start_rotation_base = self.simulator.getHandBaseRotationMatrix().copy()
         self.translation_base = self.simulator.getHandBasePosition().copy()
         self.inverse_start_transformation_base = euclideanTransformation(self.start_rotation_base.T,
@@ -148,7 +149,7 @@ class Mapper:
             rospy.logfatal("Transformation between the points not defined!")
             exit(1)
 
-    def __publishTransformation(self, data):
+    def __getAndPublishTransformation(self, data):
         br = tf2_ros.TransformBroadcaster()
         t = geometry_msgs.msg.TransformStamped()
 
@@ -254,7 +255,7 @@ class Mapper:
         data = self.__transformToCameraLink(data)
         data = self.data_filtering.filter(data)
 
-        transformation_matrix = self.__publishTransformation(data)  # get to not rotated hand coordinates
+        transformation_matrix = self.__getAndPublishTransformation(data)  # get to not rotated hand coordinates
         data = self.__transformDataWithTransform(data, transformation_matrix)
         data.joints_position = self.scaler.scalePoints(data.joints_position)  # ready to save after scaling
         new_transformation_matrix = self.__transformTransformationMatrix(transformation_matrix)
@@ -271,7 +272,10 @@ class Mapper:
 
     def _newPositionFromHPE(self, data, position, quaternion):
         self.hand.newPositionFromHPE(data)
-        self.PSO.new_taget_pose(data, position, quaternion)
+        try:
+            self.PSO.new_taget_pose(data, position, quaternion)
+        except AttributeError:
+            pass
 
     def getControlOnce(self):
         self.FPSCounter.getAndPrintFPS()
@@ -280,7 +284,10 @@ class Mapper:
     def getClampedControlOnce(self):
         self.FPSCounter.getAndPrintFPS()
         actions = self.hand.getControlOnce()
-        actions = self.PSO.optimize(actions, self.simulator)
+        try:
+            actions = self.PSO.optimize(actions, self.simulator)
+        except AttributeError:
+            pass
         return self.simulator.clampActions(actions)
 
     def __executeInverseOnce(self):
