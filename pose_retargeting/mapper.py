@@ -19,13 +19,14 @@ from pose_retargeting.FPS_counter import FPSCounter
 from pose_retargeting.scaler import Scaler
 from pose_retargeting.filtering.kalman import Kalman
 from pose_retargeting.optimization.pso import PSO
+from pose_retargeting.optimization.nn_optimize import NN_optimize
 from pose_retargeting.simulator.sim_mujoco import euclideanTransformation
 import logging
 logger = logging.getLogger(__name__)
 
 
 class Mapper:
-    def __init__(self, node_name, simulator=None, use_PSO=True):
+    def __init__(self, node_name, simulator=None, use_PSO=False, use_nn_optimize=True):
         self.last_callback_time = 0  # 0 means no callback yet
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
@@ -58,6 +59,8 @@ class Mapper:
 
         if use_PSO:
             self.PSO = PSO(self.simulator)
+        elif use_nn_optimize:
+            self.NN_optimize = NN_optimize()
         self.start_rotation_base = self.simulator.getHandBaseRotationMatrix().copy()
         self.translation_base = self.simulator.getHandBasePosition().copy()
         self.translation_base /= 4  # moves the hand a bit forward
@@ -290,11 +293,15 @@ class Mapper:
         self.FPSCounter.getAndPrintFPS()
         return self.hand.getControlOnce()
 
-    def getClampedControlOnce(self):
+    def getClampedControlOnce(self, observation):
         self.FPSCounter.getAndPrintFPS()
         actions = self.hand.getControlOnce()
         try:
             actions = self.PSO.optimize(actions, self.simulator)
+        except AttributeError:
+            pass
+        try:
+            actions = self.NN_optimize.optimize(observation, actions, self.simulator)
         except AttributeError:
             pass
         return self.simulator.clampActions(actions)
