@@ -16,7 +16,7 @@ class Particle:
         self.actuator_count = mujoco_env.getNumberOfJoints()
 
         global_orient_std = 5 / 180 * np.pi
-        finger_std = 0.5  # given as angle velocity
+        finger_std = 0.75  # given as angle velocity
         global_trans_std = 0.03
         init_action_range = [global_trans_std, global_trans_std, global_trans_std, global_orient_std, global_orient_std,
                              global_orient_std]
