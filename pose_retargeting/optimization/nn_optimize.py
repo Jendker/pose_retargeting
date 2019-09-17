@@ -18,12 +18,13 @@ def biggest_int(x):
 
 class NN_optimize:
     def __init__(self, path=None, policy=None):
+        job_name = 'best_relocate_demo_init_dapg'
         if policy is None:
             if path is None:
                 script_path = os.path.realpath(__file__)
                 path = os.path.dirname(script_path) + "/../../../mt_src/mt_src/training/"
-            if os.path.exists(path + "/relocate_demo_init_dapg/iterations"):
-                path = path + "/relocate_demo_init_dapg/iterations"
+            if os.path.exists(path + "/" + job_name + "/iterations"):
+                path = path + "/" + job_name + "/iterations"
             try:
                 file_list = os.listdir(path)
             except NotADirectoryError:
@@ -37,14 +38,14 @@ class NN_optimize:
                         open(path + '/policy_' + str(max_iteration_number) + '.pickle', 'rb'))
                 print("NN optimize starting from iteration no. " + str(max_iteration_number))
             else:
-                print("No policy files found for NN optimize. Exiting.")
+                print("No policy files found for NN optimize in path:\n" + path + "\nExiting.")
                 exit(1)
         self.policy = policy
 
         self.obj_body_index = None
         self.grasp_site_index = None
 
-        self.weight_nn = 0.3
+        self.weight_nn = 0.25
 
     def getDistanceBetweenObjectAndHand(self, mujoco_env):
         if self.obj_body_index is None:
@@ -57,7 +58,7 @@ class NN_optimize:
 
     def optimize(self, observation, action, sim_env):
         distance_between_object_and_hand = self.getDistanceBetweenObjectAndHand(sim_env)
-        if distance_between_object_and_hand > 0.07:
+        if distance_between_object_and_hand > 0.075:
             return action
         new_action = (self.weight_nn * self.policy.get_action(observation)[1]['evaluation'] + (1 - self.weight_nn) *
                       action)
