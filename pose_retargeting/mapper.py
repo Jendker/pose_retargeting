@@ -57,6 +57,8 @@ class Mapper:
         self.scaler = Scaler(self.simulator)
         logger.info("Pose mapping initialization finished.")
 
+        self.PSO = None
+        self.NN_optimize = None
         if use_PSO:
             self.PSO = PSO(self.simulator)
         elif use_nn_optimize:
@@ -284,10 +286,8 @@ class Mapper:
 
     def _newPositionFromHPE(self, data, position, quaternion):
         self.hand.newPositionFromHPE(data)
-        try:
+        if self.PSO is not None:
             self.PSO.new_taget_pose(data, position, quaternion)
-        except AttributeError:
-            pass
 
     def getControlOnce(self):
         self.FPSCounter.getAndPrintFPS()
@@ -296,14 +296,10 @@ class Mapper:
     def getClampedControlOnce(self, observation):
         self.FPSCounter.getAndPrintFPS()
         actions = self.hand.getControlOnce()
-        try:
+        if self.PSO is not None:
             actions = self.PSO.optimize(actions, self.simulator)
-        except AttributeError:
-            pass
-        try:
+        if self.NN_optimize is not None:
             actions = self.NN_optimize.optimize(observation, actions, self.simulator)
-        except AttributeError:
-            pass
         return self.simulator.clampActions(actions)
 
     def __executeInverseOnce(self):
