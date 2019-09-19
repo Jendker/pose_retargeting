@@ -16,7 +16,7 @@ class Particle:
         self.actuator_count = mujoco_env.getNumberOfJoints()
 
         global_orient_std = 5 / 180 * np.pi
-        finger_std = 0.75  # given as angle velocity
+        finger_std = 0.2  # given as angle velocity
         global_trans_std = 0.03
         init_action_range = [global_trans_std, global_trans_std, global_trans_std, global_orient_std, global_orient_std,
                              global_orient_std]
@@ -35,6 +35,7 @@ class Particle:
         self.simulator_initial_state = simulator_state
         self.position_lower_bound = np.maximum(self.actions_lower_bound, position - self.init_action_range)
         self.position_upper_bound = np.minimum(self.actions_upper_bound, position + self.init_action_range)
+        # TODO: Why does this assert fail?
         # if not np.all(self.position_upper_bound >= self.position_lower_bound):
         #     error = 1
         # assert np.all(self.position_upper_bound >= self.position_lower_bound)
