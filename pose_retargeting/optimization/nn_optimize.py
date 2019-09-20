@@ -60,6 +60,7 @@ class NN_optimize:
         distance_between_object_and_hand = self.getDistanceBetweenObjectAndHand(sim_env)
         if distance_between_object_and_hand > 0.075:
             return action
-        new_action = (self.weight_nn * self.policy.get_action(observation)[1]['evaluation'] + (1 - self.weight_nn) *
-                      action)
+        nn_actions = self.policy.get_action(observation)[1]['evaluation']
+        new_action = self.weight_nn * nn_actions + (1 - self.weight_nn) * action
+        new_action[:6] = action[:6]  # don't optimize the position and orientation with NN
         return new_action
