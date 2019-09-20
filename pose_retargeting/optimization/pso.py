@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import time
 from math import ceil, isclose
 from pose_retargeting.optimization.particle import Particle
 from pose_retargeting.simulator.sim_mujoco import Mujoco
@@ -103,11 +102,10 @@ class PSO:
         # simulator_state and initial_particle_position are not the same, the actions from inverse kin. are the latter
         inputs = [[initial_particle_position, simulator_state, self.weights, self.targets] for _ in range(self.num_cpu)]
         fitness_positions = np.array(self._run_multiprocess(inputs, PSO.batchParticlesInitialization))
-        fitness = fitness_positions[:, :, 0]
-        lowest_batch_index, lowest_particle_index = np.unravel_index(np.argmin(fitness, axis=None),
-                                                                     fitness.shape)
-        lowest_fitness = fitness[lowest_batch_index, lowest_particle_index]
-        self.best_global_particle_position = fitness_positions[lowest_batch_index][lowest_particle_index][1]
+        fitness = fitness_positions[:, 0]
+        lowest_batch_index = np.unravel_index(np.argmin(fitness, axis=None), fitness.shape)
+        lowest_fitness = fitness[lowest_batch_index]
+        self.best_global_particle_position = fitness_positions[lowest_batch_index][1]
         self.best_global_fitness = lowest_fitness
 
     def optimize(self, actions, mujoco_env):
@@ -115,28 +113,28 @@ class PSO:
         if distance_between_object_and_hand > 0.1:
             return actions
 
-        start_time = time.time()
         self.weights.update_weights(distance_between_object_and_hand)
         simulator_state = mujoco_env.env.gs()
 
         self.initializeParticles(actions, simulator_state)
 
+        last_converged = False
         for i in range(0, self.iteration_count):
             inputs = [[self.weights, self.targets, self.best_global_particle_position] for _ in range(self.num_cpu)]
             fitness_positions = np.array(self._run_multiprocess(inputs, PSO.batchParticlesGeneration))
-            fitness = fitness_positions[:, :, 0]
-            lowest_batch_index, lowest_particle_index = np.unravel_index(np.argmin(fitness, axis=None),
-                                                                         fitness.shape)
-            lowest_fitness = fitness[lowest_batch_index][lowest_particle_index]
-            converged = isclose(lowest_fitness, self.best_global_fitness, rel_tol=self.convergance_difference)
+            fitness = fitness_positions[:, 0]
+            lowest_batch_index = np.unravel_index(np.argmin(fitness, axis=None), fitness.shape)
+            lowest_fitness = fitness[lowest_batch_index]
+            converged = isclose(lowest_fitness, self.best_global_fitness, rel_tol=self.convergance_difference) or \
+                self.best_global_fitness < lowest_fitness
             if lowest_fitness < self.best_global_fitness:
-                self.best_global_particle_position = fitness_positions[lowest_batch_index][lowest_particle_index][1]
+                self.best_global_particle_position = fitness_positions[lowest_batch_index][1]
                 self.best_global_fitness = lowest_fitness
-            if converged:
+            if converged and last_converged:
                 break
+            last_converged = converged
 
         self.last_best_particle_position = self.best_global_particle_position
-        print(time.time() - start_time)
         return self.best_global_particle_position
 
     def _run_multiprocess(self, args_list, function):
@@ -249,14 +247,16 @@ class PSO:
         targets = inputs[3]
         global glob_sim_mujoco_worker, glob_particle_batch
 
-        energies_positions = []
+        energies = []
         for particle in glob_particle_batch:
             particle.initializePosition(initial_particle_position, simulator_state)  # also sets self best to current
             particle.simulationStep(glob_sim_mujoco_worker)
             this_energy = PSO.fitness(particle, weights, targets)
-            energies_positions.append([this_energy, particle.position])
+            energies.append(this_energy)
             particle.initializeVelocity()
-        return energies_positions
+        lowest_energy = min(energies)
+        lowest_energy_position = glob_particle_batch[energies.index(lowest_energy)].position
+        return [lowest_energy, lowest_energy_position]
 
     @staticmethod
     def batchParticlesGeneration(inputs):
@@ -265,15 +265,17 @@ class PSO:
         global_best_particle_position = inputs[2]
         global glob_sim_mujoco_worker, glob_particle_batch
 
-        energies_positions = []
+        energies = []
         for particle in glob_particle_batch:
             particle.updateGlobalBest(global_best_particle_position)
             particle.updatePositionAndVelocity()
             particle.simulationStep(glob_sim_mujoco_worker)
             this_energy = PSO.fitness(particle, weights, targets)
-            energies_positions.append([this_energy, particle.position])
+            energies.append(this_energy)
             particle.updatePersonalBest(this_energy)
-        return energies_positions
+        lowest_energy = min(energies)
+        lowest_energy_position = glob_particle_batch[energies.index(lowest_energy)].position
+        return [lowest_energy, lowest_energy_position]
 
     @staticmethod
     def fitness(particle, weights, targets):
