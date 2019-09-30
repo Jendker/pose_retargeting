@@ -114,7 +114,7 @@ class PSO:
             return actions
 
         self.weights.update_weights(distance_between_object_and_hand)
-        simulator_state = mujoco_env.env.gs()
+        simulator_state = mujoco_env.env.get_env_state()
 
         self.initializeParticles(actions, simulator_state)
 

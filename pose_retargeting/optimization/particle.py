@@ -65,7 +65,7 @@ class Particle:
 
     def simulationStep(self, sim_mujoco_worker):
         self.sim_mujoco_worker = sim_mujoco_worker
-        self.sim_mujoco_worker.env.ss(self.simulator_initial_state)
+        self.sim_mujoco_worker.env.set_env_state(self.simulator_initial_state)
         self.sim_mujoco_worker.env.step(self.position)
 
     def getActiveContactsDist(self):
