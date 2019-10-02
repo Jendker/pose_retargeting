@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class Mapper:
-    def __init__(self, node_name, simulator=None, use_PSO=False, use_nn_optimize=True):
+    def __init__(self, node_name, simulator=None, use_PSO=False, use_nn_optimize=True, optimization=True):
         self.last_callback_time = 0  # 0 means no callback yet
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
@@ -59,10 +59,11 @@ class Mapper:
 
         self.PSO = None
         self.NN_optimize = None
-        if use_PSO:
-            self.PSO = PSO(self.simulator)
-        elif use_nn_optimize:
-            self.NN_optimize = NN_optimize()
+        if optimization:
+            if use_PSO:
+                self.PSO = PSO(self.simulator)
+            elif use_nn_optimize:
+                self.NN_optimize = NN_optimize()
         self.start_rotation_base = self.simulator.getHandBaseRotationMatrix().copy()
         self.translation_base = self.simulator.getHandBasePosition().copy()
         self.translation_base /= 4  # moves the hand a bit forward
