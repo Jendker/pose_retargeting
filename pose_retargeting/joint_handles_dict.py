@@ -24,7 +24,7 @@ class JointHandlesDict:
         if simulator is None or simulator.type == SimulatorType.MUJOCO:
             if env_name is None:
                 env_name = simulator.env_name
-            if env_name == 'relocateSR-v0':
+            if 'relocateSR' in env_name:
                 joint_names = ['rh_FFJ4', 'rh_FFJ3', 'rh_FFJ2', 'rh_FFJ1', 'rh_fftip', 'rh_MFJ4', 'rh_MFJ3', 'rh_MFJ2',
                                'rh_MFJ1', 'rh_mftip', 'rh_RFJ4', 'rh_RFJ3', 'rh_RFJ2', 'rh_RFJ1', 'rh_rftip', 'rh_LFJ5',
                                'rh_LFJ4', 'rh_LFJ3', 'rh_LFJ2', 'rh_LFJ1', 'rh_lftip', 'rh_THJ5', 'rh_THJ4', 'rh_THJ3',
