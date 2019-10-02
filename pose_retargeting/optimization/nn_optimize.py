@@ -23,8 +23,10 @@ class NN_optimize:
             if path is None:
                 script_path = os.path.realpath(__file__)
                 path = os.path.dirname(script_path) + "/../../../mt_src/mt_src/training/"
-            if os.path.exists(path + "/" + job_name + "/iterations"):
-                path = path + "/" + job_name + "/iterations"
+            path = path + "/" + job_name + "/iterations"
+            if not os.path.exists(path):
+                print("NN optimize. Path with policy:\n", path, "\nDoes not exist! Exiting.")
+                exit(1)
             try:
                 file_list = os.listdir(path)
             except NotADirectoryError:
