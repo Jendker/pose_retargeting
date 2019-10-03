@@ -18,7 +18,7 @@ def biggest_int(x):
 
 class NN_optimize:
     def __init__(self, path=None, policy=None):
-        job_name = 'best_relocate_demo_init_dapg'
+        job_name = 'relocate_demo_init_dapg'
         if policy is None:
             if path is None:
                 script_path = os.path.realpath(__file__)
