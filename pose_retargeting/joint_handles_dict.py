@@ -24,7 +24,18 @@ class JointHandlesDict:
         if simulator is None or simulator.type == SimulatorType.MUJOCO:
             if env_name is None:
                 env_name = simulator.env_name
-            if 'relocateSR' in env_name:
+            if env_name == 'relocate-v0':
+                joint_names = ['FFJ3', 'FFJ2', 'FFJ1', 'FFJ0', 'fftip', 'MFJ3', 'MFJ2', 'MFJ1',
+                               'MFJ0', 'mftip', 'RFJ3', 'RFJ2', 'RFJ1', 'RFJ0', 'rftip', 'LFJ4',
+                               'LFJ3', 'LFJ2', 'LFJ1', 'LFJ0', 'lftip', 'THJ4', 'THJ3', 'THJ2',
+                               'THJ1', 'THJ0', 'thtip', 'forearm', 'WRJ0', 'WRJ1', 'THJ5']
+
+                body_names = ['ffknuckle', 'ffproximal', 'ffmiddle', 'ffdistal', 'fftip', 'mfknuckle',
+                              'mfproximal', 'mfmiddle', 'mfdistal', 'mftip', 'rfknuckle', 'rfproximal',
+                              'rfmiddle', 'rfdistal', 'rftip', 'lfmetacarpal', 'lfknuckle', 'lfproximal',
+                              'lfmiddle', 'lfdistal', 'lftip', 'thbase', 'thproximal', 'thhub',
+                              'thmiddle', 'thdistal', 'thtip', 'forearm', 'wrist', 'wrist', 'thbase']
+            elif env_name is not None:
                 joint_names = ['rh_FFJ4', 'rh_FFJ3', 'rh_FFJ2', 'rh_FFJ1', 'rh_fftip', 'rh_MFJ4', 'rh_MFJ3', 'rh_MFJ2',
                                'rh_MFJ1', 'rh_mftip', 'rh_RFJ4', 'rh_RFJ3', 'rh_RFJ2', 'rh_RFJ1', 'rh_rftip', 'rh_LFJ5',
                                'rh_LFJ4', 'rh_LFJ3', 'rh_LFJ2', 'rh_LFJ1', 'rh_lftip', 'rh_THJ5', 'rh_THJ4', 'rh_THJ3',
@@ -37,17 +48,6 @@ class JointHandlesDict:
                               'rh_lfmiddle', 'rh_lfdistal', 'rh_lftip', 'rh_thbase', 'rh_thproximal', 'rh_thhub',
                               'rh_thmiddle', 'rh_thdistal', 'rh_thtip', 'rh_forearm', 'rh_wrist', 'rh_wrist',
                               'rh_thbase']
-            elif env_name == 'relocate-v0':
-                joint_names = ['FFJ3', 'FFJ2', 'FFJ1', 'FFJ0', 'fftip', 'MFJ3', 'MFJ2', 'MFJ1',
-                               'MFJ0', 'mftip', 'RFJ3', 'RFJ2', 'RFJ1', 'RFJ0', 'rftip', 'LFJ4',
-                               'LFJ3', 'LFJ2', 'LFJ1', 'LFJ0', 'lftip', 'THJ4', 'THJ3', 'THJ2',
-                               'THJ1', 'THJ0', 'thtip', 'forearm', 'WRJ0', 'WRJ1', 'THJ5']
-
-                body_names = ['ffknuckle', 'ffproximal', 'ffmiddle', 'ffdistal', 'fftip', 'mfknuckle',
-                              'mfproximal', 'mfmiddle', 'mfdistal', 'mftip', 'rfknuckle', 'rfproximal',
-                              'rfmiddle', 'rfdistal', 'rftip', 'lfmetacarpal', 'lfknuckle', 'lfproximal',
-                              'lfmiddle', 'lfdistal', 'lftip', 'thbase', 'thproximal', 'thhub',
-                              'thmiddle', 'thdistal', 'thtip', 'forearm', 'wrist', 'wrist', 'thbase']
             else:
                 raise ValueError
 
