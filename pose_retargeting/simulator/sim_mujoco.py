@@ -18,7 +18,7 @@ def euclideanTransformation(rotation_matrix, transformation_vector):
 
 
 class Mujoco(Simulator):
-    def __init__(self, env, env_name, visualisation=False):
+    def __init__(self, env, env_name=None, visualisation=False):
         super().__init__()
         self.type = SimulatorType.MUJOCO
         self.visualisation = visualisation
@@ -27,7 +27,10 @@ class Mujoco(Simulator):
         except AttributeError:
             self.env = env.env
         self.last_observations = []
-        self.env_name = env_name
+        if env_name is None:
+            self.env_name = env.env.unwrapped.spec.id
+        else:
+            self.env_name = env_name
 
         self.limits_hand_orientation = ((-3.14, 3.14), (-3.14, 3.14), (-3.14, 3.14))
 
@@ -262,15 +265,6 @@ class Mujoco(Simulator):
                                            rgba=np.array([1 * (i % 3), 1 * ((i + 1) % 3), 1 * ((i + 2) % 3), 0.6]))
             except (AttributeError, TypeError):
                 pass
-
-    def getAllJointPositions(self):
-        return self.env.data.qpos[:-6]
-
-    def getAllJointNames(self):
-        return self.env.model.joint_names[:-6]
-
-    def getGraspSidePosition(self):
-        return self.env.model.site_name2id('S_grasp')
 
     def getHandBaseRotationMatrix(self):
         return self.env.data.body_xmat[self.hand_base_index].reshape((3, 3))
