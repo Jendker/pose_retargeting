@@ -97,15 +97,16 @@ class HandPart:
         if not self.task_prioritization:
             return np.identity(3 * self.tasks_count) * 0.00001
 
-        lambda_max = 0.01
+        lambda_max = 0.05
         epsilon = 0.001
-        _, s, _ = np.linalg.svd(jacobian)
-        smallest_sigma = s[jacobian.shape[0] - 1]
+        u, s, _ = np.linalg.svd(jacobian)
+        smallest_sigma = s[-1]
         if smallest_sigma >= epsilon:
             output_lambda = 0
         else:
             output_lambda = (1 - (smallest_sigma / epsilon) ** 2.) * lambda_max
-        return np.identity(3) * output_lambda
+        smallest_left_singular_vector = u[:, -1]
+        return output_lambda * np.outer(smallest_left_singular_vector, smallest_left_singular_vector)
 
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(self.DOF_count)
