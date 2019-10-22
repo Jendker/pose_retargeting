@@ -140,7 +140,8 @@ class Mujoco(Simulator):
         return [True, self.env.data.qpos[idx]]
 
     def getJointIndexPosition(self, index):
-        assert (len(self.env.data.qpos) == len(self.env.data.qvel))  # need to make sure, for some envs this is not the same
+        # TODO: change somehow to still check if qpos is correct
+        # assert (len(self.env.data.qpos) == len(self.env.data.qvel))  # need to make sure, for some envs this is not the same
         return self.env.data.qpos[index]
 
     def getJointNamePosition(self, joint_name):

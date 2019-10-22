@@ -62,15 +62,16 @@ class Hand:
         # clamp velocities between -3.5 and 3.5
         for key, value in action_dict.items():
             action_dict[key] = min(max(-3.5, value), 3.5)
-        # for key, value in action_dict.items():
-        #     action_dict[key] = value * self.simulator.env.dt  # integrate the velocity
+         # integrate the velocity
+        for key, value in action_dict.items():
+            action_dict[key] = value * self.simulator.env.dt
 
         complete_action_vector = self.simulator.getHandBaseAction()
         complete_action_vector = np.pad(complete_action_vector, (0, self.simulator.getNumberOfJoints() -
                                                                  complete_action_vector.size), 'constant',
                                         constant_values=0)
         for k, v in action_dict.items():
-            complete_action_vector[k] = v  #+ self.simulator.getJointIndexPosition(k)  # add position step to current
+            complete_action_vector[k] = v + self.simulator.getJointIndexPosition(k)  # add position step to current
         return complete_action_vector
 
     def newPositionFromHPE(self, new_data):
