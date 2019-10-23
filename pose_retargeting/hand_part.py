@@ -93,21 +93,29 @@ class HandPart:
             dummy_targets.append(dummy_target)
         return dummy_targets
 
+    # based on Chiaverini's paper Singularity-Robust Task-Priority Redundancy
     def __getDampingMatrix(self, jacobian):
         if not self.task_prioritization:
             return np.identity(3 * self.tasks_count) * 0.00001
 
-        lambda_max = 0.05
-        epsilon = 0.001
+        lambda_max = 0.001
+        epsilon = 0.00001
         u, s, _ = np.linalg.svd(jacobian)
         smallest_sigma = s[-1]
+        # equation 16
         if smallest_sigma >= epsilon:
             output_lambda = 0
         else:
             output_lambda = (1 - (smallest_sigma / epsilon) ** 2.) * lambda_max
         smallest_left_singular_vector = u[:, -1]
-        return output_lambda * np.outer(smallest_left_singular_vector, smallest_left_singular_vector)
+        damping_matrix = output_lambda * np.outer(smallest_left_singular_vector, smallest_left_singular_vector)
+        # if multiple kinematic singularities
+        if s[-2] < epsilon:
+            beta = 0.0000001  # equation 20
+            damping_matrix += np.identity(3) * beta
+        return damping_matrix
 
+    # based on Dariush's paper Whole Body Humanoid Control From Human Motion Descriptors
     def __updateWeightMatrixInverse(self):
         weight_matrix = np.identity(self.DOF_count)
         for index, joint_handle in enumerate(self.list_joints_handles):
@@ -116,6 +124,7 @@ class HandPart:
                 continue
             joint_velocity = self.joint_velocity[index]
             joint_max, joint_min = self.joints_limits[index]
+            # based on equation 12
             joint_middle = (joint_max + joint_min) / 2.0
             going_away = bool((joint_position > joint_middle and joint_velocity - 0.0000001 < 0) or
                               (joint_position < joint_middle and joint_velocity + 0.0000001 > 0))
