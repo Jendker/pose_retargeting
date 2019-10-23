@@ -117,8 +117,8 @@ class HandPart:
             joint_velocity = self.joint_velocity[index]
             joint_max, joint_min = self.joints_limits[index]
             joint_middle = (joint_max + joint_min) / 2.0
-            going_away = bool((joint_position > joint_middle and joint_velocity < 0) or
-                              (joint_position < joint_middle and joint_velocity > 0))
+            going_away = bool((joint_position > joint_middle and joint_velocity - 0.0000001 < 0) or
+                              (joint_position < joint_middle and joint_velocity + 0.0000001 > 0))
             if going_away:
                 w = 1.0
             else:
