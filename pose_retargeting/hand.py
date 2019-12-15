@@ -59,6 +59,9 @@ class Hand:
         action_dict = {}
         for hand_part in self.hand_parts_list:
             action_dict.update(hand_part.executeControl())  # given as velocities
+        # clamp velocities between -3.5 and 3.5
+        for key, value in action_dict.items():
+            action_dict[key] = min(max(-3.5, value), 3.5)
         # for key, value in action_dict.items():
         #     action_dict[key] = value * self.simulator.env.dt  # integrate the velocity
 
