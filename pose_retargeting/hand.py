@@ -48,6 +48,7 @@ class Hand:
                                                        ['TPIP_front_joint', 'TDIP_joint', 'TTIP_tip']],
                                                       [[9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20],
                                                        [6, 7, 8]], 10, self.simulator)
+        self.previous_target_joint_positions = {}
 
     def controlOnce(self):
         for hand_part in self.hand_parts_list:
@@ -61,7 +62,8 @@ class Hand:
             action_dict.update(hand_part.executeControl())  # given as velocities
         # clamp velocities between -3.5 and 3.5
         for key, value in action_dict.items():
-            action_dict[key] = min(max(-3.5, value), 3.5)
+            if key >= 8:  # clamp only finger velocities
+                action_dict[key] = min(max(-3.5, value), 3.5)
          # integrate the velocity
         for key, value in action_dict.items():
             action_dict[key] = value * self.simulator.env.dt
@@ -71,7 +73,14 @@ class Hand:
                                                                  complete_action_vector.size), 'constant',
                                         constant_values=0)
         for k, v in action_dict.items():
-            complete_action_vector[k] = v + self.simulator.getJointIndexPosition(k)  # add position step to current
+            if k in self.previous_target_joint_positions:
+                previous_target_joint_position = (self.previous_target_joint_positions[k] +
+                                                  self.simulator.getJointIndexPosition(k)) / 2
+            else:
+                previous_target_joint_position = self.simulator.getJointIndexPosition(k)
+            this_target_joint_position = v + previous_target_joint_position   # add position step to current
+            complete_action_vector[k] = this_target_joint_position
+            self.previous_target_joint_positions[k] = this_target_joint_position
         return complete_action_vector
 
     def newPositionFromHPE(self, new_data):
