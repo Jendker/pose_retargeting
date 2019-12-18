@@ -15,7 +15,7 @@ glob_particle_batch = None
 
 
 class PSO:
-    def __init__(self, mujoco_env, parameters=None, no_cpu=8):
+    def __init__(self, mujoco_env, parameters=None, no_cpu=4):
         self.num_cpu = no_cpu
 
         if parameters is None:
