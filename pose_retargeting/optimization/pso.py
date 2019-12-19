@@ -82,6 +82,10 @@ class PSO:
         palm_pos = mujoco_env.env.data.site_xpos[self.grasp_site_index].ravel()
         return np.linalg.norm(obj_pos - palm_pos)
 
+    def isObjectAboveTable(self, mujoco_env):
+        obj_pos = mujoco_env.env.data.body_xpos[self.obj_body_index].ravel()
+        return obj_pos[2] > 0.1
+
     @staticmethod
     def initialize_pool(constant_data, parameters, contact_pairs, mujoco_env, particles_in_batch):
         global glob_sim_mujoco_worker, glob_constant_data, glob_particle_batch
@@ -112,6 +116,10 @@ class PSO:
         distance_between_object_and_hand = self.getDistanceBetweenObjectAndHand(mujoco_env)
         if distance_between_object_and_hand > 0.1:
             return actions
+        if self.isObjectAboveTable(mujoco_env):
+            this_iteration_count = int(np.floor(self.iteration_count/2))
+        else:
+            this_iteration_count = self.iteration_count
 
         self.weights.update_weights(distance_between_object_and_hand)
         simulator_state = mujoco_env.env.get_env_state()
@@ -119,7 +127,7 @@ class PSO:
         self.initializeParticles(actions, simulator_state)
 
         last_converged = False
-        for i in range(0, self.iteration_count):
+        for i in range(0, this_iteration_count):
             inputs = [[self.weights, self.targets, self.best_global_particle_position] for _ in range(self.num_cpu)]
             fitness_positions = np.array(self._run_multiprocess(inputs, PSO.batchParticlesGeneration))
             fitness = fitness_positions[:, 0]
