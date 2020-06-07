@@ -4,7 +4,7 @@ from math import ceil, isclose
 from pose_retargeting.optimization.particle import Particle
 from pose_retargeting.simulator.sim_mujoco import Mujoco
 from mjrl.utils.gym_env import GymEnv
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from pose_retargeting.rotations_mujoco import quat2euler
 from pose_retargeting.optimization.miscellaneous import Targets, ConstantData, Weights
 
@@ -15,8 +15,10 @@ glob_particle_batch = None
 
 
 class PSO:
-    def __init__(self, mujoco_env, parameters=None, no_cpu=4):
-        self.num_cpu = no_cpu
+    def __init__(self, mujoco_env, parameters=None, num_cpu=None):
+        self.num_cpu = num_cpu
+        if self.num_cpu is None:
+            self.num_cpu = cpu_count()
 
         if parameters is None:
             self.parameters = {'c1': 2.8, 'c2': 1.3}
@@ -30,6 +32,8 @@ class PSO:
         self.iteration_count = 5
         self.dimension = mujoco_env.getNumberOfJoints()
         self.convergance_difference = 5e-05
+
+        self.optimization_distance_threshold = 0.04
 
         self.particles = None
         self.best_global_fitness = float("inf")
@@ -114,7 +118,7 @@ class PSO:
 
     def optimize(self, actions, mujoco_env):
         distance_between_object_and_hand = self.getDistanceBetweenObjectAndHand(mujoco_env)
-        if distance_between_object_and_hand > 0.1:
+        if distance_between_object_and_hand > self.optimization_distance_threshold:
             return actions
         if self.isObjectAboveTable(mujoco_env):
             this_iteration_count = int(np.floor(self.iteration_count/2))
