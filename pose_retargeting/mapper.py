@@ -20,13 +20,14 @@ from pose_retargeting.scaler import Scaler
 from pose_retargeting.filtering.kalman import Kalman
 from pose_retargeting.optimization.pso import PSO
 from pose_retargeting.optimization.nn_optimize import NN_optimize
+from pose_retargeting.optimization.position_controller import PositionController
 from pose_retargeting.simulator.sim_mujoco import euclideanTransformation
 import logging
 logger = logging.getLogger(__name__)
 
 
 class Mapper:
-    def __init__(self, node_name, simulator=None, use_PSO=False, use_nn_optimize=True, optimization=True):
+    def __init__(self, node_name, simulator=None, use_PSO=False, use_nn_optimize=True, optimization=True, position_controller_nn=False):
         self.last_callback_time = 0  # 0 means no callback yet
         self.node_frame_name = "hand_vrep"
         self.camera_frame_name = "camera_link"
@@ -59,11 +60,17 @@ class Mapper:
 
         self.PSO = None
         self.NN_optimize = None
+        self.PositionController = None
+        assert not (optimization and position_controller_nn), "Set either optimization or position_controller_nn parameter."
         if optimization:
             if use_PSO:
                 self.PSO = PSO(self.simulator)
             elif use_nn_optimize:
                 self.NN_optimize = NN_optimize()
+            else:
+                raise ValueError("Need to specify either PSO or NN_optimize if using optimization")
+        elif position_controller_nn:
+            self.PositionController = PositionController()
         self.start_rotation_base = self.simulator.getHandBaseRotationMatrix().copy()
         self.translation_base = self.simulator.getHandBasePosition().copy()
         self.translation_base /= 4  # moves the hand a bit forward
@@ -302,6 +309,8 @@ class Mapper:
             actions = self.PSO.optimize(actions, self.simulator)
         if self.NN_optimize is not None:
             actions = self.NN_optimize.optimize(observation, actions, self.simulator)
+        if self.PositionController is not None:
+            actions = self.PositionController.get_control(actions, self.simulator)
         return actions
 
     def __executeInverseOnce(self):
