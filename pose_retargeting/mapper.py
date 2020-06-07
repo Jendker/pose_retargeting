@@ -297,11 +297,12 @@ class Mapper:
     def getClampedControlOnce(self, observation):
         self.FPSCounter.getAndPrintFPS()
         actions = self.hand.getControlOnce()
+        actions = self.simulator.clampActions(actions)
         if self.PSO is not None:
             actions = self.PSO.optimize(actions, self.simulator)
         if self.NN_optimize is not None:
             actions = self.NN_optimize.optimize(observation, actions, self.simulator)
-        return self.simulator.clampActions(actions)
+        return actions
 
     def __executeInverseOnce(self):
         self.hand.controlOnce()
