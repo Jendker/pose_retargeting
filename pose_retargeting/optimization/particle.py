@@ -2,7 +2,7 @@ import numpy as np
 
 
 class Particle:
-    def __init__(self, mujoco_env, parameters, contact_pairs):
+    def __init__(self, mujoco_env, parameters, contact_pairs, masked_indices):
         self.parameters = parameters
 
         self.best_position = None
@@ -28,10 +28,13 @@ class Particle:
         self.position_upper_bound = None
         self.velocity_bound = None
         self.contact_pairs = contact_pairs
+        self.masked_indices = masked_indices
+        self.original_actions = None
 
         self.sim_mujoco_worker = None
 
-    def initializePosition(self, position, simulator_state):
+    def initializePosition(self, position, original_actions, simulator_state):
+        self.original_actions = original_actions
         self.simulator_initial_state = simulator_state
         self.position_lower_bound = np.maximum(self.actions_lower_bound, position - self.init_action_range)
         self.position_upper_bound = np.minimum(self.actions_upper_bound, position + self.init_action_range)
@@ -41,6 +44,7 @@ class Particle:
         # assert np.all(self.position_upper_bound >= self.position_lower_bound)
         self.velocity_bound = np.abs(self.position_upper_bound - self.position_lower_bound)
         self.position = np.random.uniform(self.position_lower_bound, self.position_upper_bound)
+        self.position[self.masked_indices] = original_actions[self.masked_indices]
         self.best_position = self.position
         self.personal_best = float("inf")
 
@@ -54,6 +58,7 @@ class Particle:
         self.velocity = np.clip(self.velocity, -self.velocity_bound, self.velocity_bound)
         self.position = self.position + self.velocity
         self.position = np.clip(self.position, self.position_lower_bound, self.position_upper_bound)
+        self.position[self.masked_indices] = self.original_actions[self.masked_indices]
 
     def updateGlobalBest(self, global_best_position):
         self.global_best_position = global_best_position

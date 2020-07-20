@@ -15,7 +15,7 @@ glob_particle_batch = None
 
 
 class PSO:
-    def __init__(self, mujoco_env, parameters=None, num_cpu=None):
+    def __init__(self, mujoco_env, parameters=None, num_cpu=None, masked_indices='default'):
         self.num_cpu = num_cpu
         if self.num_cpu is None:
             self.num_cpu = cpu_count()
@@ -44,12 +44,18 @@ class PSO:
         #                                           self.mujoco_env.model.joint_name2id('rh_FFJ4'):
         #                                           self.mujoco_env.model.joint_name2id('rh_THJ1')+1]
 
+        if masked_indices == 'default':
+            self.masked_indices = slice(0, 6)
+        if masked_indices is None:
+            self.masked_indices = slice(0, 0)
+
         self.constant_data = ConstantData(mujoco_env)
 
         # parallel workers with environments
         if self.num_cpu > 1:
             self.worker_pool = Pool(self.num_cpu, initializer=PSO.initialize_pool, initargs=[self.constant_data,
-                                    self.parameters, self.getContactPairs(mujoco_env), mujoco_env, self.particles_in_batch])
+                                    self.parameters, self.getContactPairs(mujoco_env), mujoco_env, self.particles_in_batch,
+                                    self.masked_indices])
 
         self.weights = Weights(self.constant_data.bodies_for_hand_pose_energy_position, mujoco_env)
         self.targets = Targets()
@@ -91,7 +97,7 @@ class PSO:
         return obj_pos[2] > 0.1
 
     @staticmethod
-    def initialize_pool(constant_data, parameters, contact_pairs, mujoco_env, particles_in_batch):
+    def initialize_pool(constant_data, parameters, contact_pairs, mujoco_env, particles_in_batch, masked_indices):
         global glob_sim_mujoco_worker, glob_constant_data, glob_particle_batch
         np.random.seed(int.from_bytes(os.urandom(4), byteorder='little'))
         env_name = mujoco_env.env_name
@@ -99,7 +105,7 @@ class PSO:
         env = GymEnv(env_name)
         env.reset()
         glob_sim_mujoco_worker = Mujoco(env, env_name)
-        glob_particle_batch = [Particle(mujoco_env, parameters, contact_pairs) for _ in range(particles_in_batch)]
+        glob_particle_batch = [Particle(mujoco_env, parameters, contact_pairs, masked_indices) for _ in range(particles_in_batch)]
 
     def initializeParticles(self, actions, simulator_state):
         if self.last_best_particle_position is not None:
@@ -108,7 +114,7 @@ class PSO:
             initial_particle_position = actions
 
         # simulator_state and initial_particle_position are not the same, the actions from inverse kin. are the latter
-        inputs = [[initial_particle_position, simulator_state, self.weights, self.targets] for _ in range(self.num_cpu)]
+        inputs = [[initial_particle_position, actions, simulator_state, self.weights, self.targets] for _ in range(self.num_cpu)]
         fitness_positions = np.array(self._run_multiprocess(inputs, PSO.batchParticlesInitialization))
         fitness = fitness_positions[:, 0]
         lowest_batch_index = np.unravel_index(np.argmin(fitness, axis=None), fitness.shape)
@@ -156,7 +162,7 @@ class PSO:
             results = []
             if glob_sim_mujoco_worker is None:
                 PSO.initialize_pool(self.constant_data, self.parameters, self.getContactPairs(self.mujoco_env),
-                                    self.mujoco_env, self.particles_in_batch)
+                                    self.mujoco_env, self.particles_in_batch, self.masked_indices)
             for i in range(self.num_cpu):
                 results.append(function(args_list[i]))
         return results
@@ -254,14 +260,15 @@ class PSO:
     @staticmethod
     def batchParticlesInitialization(inputs):
         initial_particle_position = inputs[0]
-        simulator_state = inputs[1]
-        weights = inputs[2]
-        targets = inputs[3]
+        original_actions = inputs[1]
+        simulator_state = inputs[2]
+        weights = inputs[3]
+        targets = inputs[4]
         global glob_sim_mujoco_worker, glob_particle_batch
 
         energies = []
         for particle in glob_particle_batch:
-            particle.initializePosition(initial_particle_position, simulator_state)  # also sets self best to current
+            particle.initializePosition(initial_particle_position, original_actions, simulator_state)  # also sets self best to current
             particle.simulationStep(glob_sim_mujoco_worker)
             this_energy = PSO.fitness(particle, weights, targets)
             energies.append(this_energy)
